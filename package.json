@@ -33,14 +33,14 @@
         "command": "git-commit-generator.generate",
         "title": "Generate Commit Message",
         "category": "Git Commit",
-        "icon": "$(git-commit)",
+        "icon": "$(sparkle)",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.selectModel",
         "title": "Select Language Model",
         "category": "Git Commit",
-        "icon": "$(refresh)",
+        "icon": "$(cloud)",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {

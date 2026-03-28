@@ -15,7 +15,6 @@ export async function getAvailableModels(): Promise<vscode.LanguageModelChat[]> 
     const models = await vscode.lm.selectChatModels({});
     return models;
   } catch (error) {
-    console.error('Error fetching models:', error);
     return [];
   }
 }

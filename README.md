@@ -1,78 +1,178 @@
 # Git Commit Message Generator
 
-AI-powered Git commit message generator for VS Code using GitHub Copilot's Language Model API. Generates commit messages following Gitmoji + Conventional Commits format.
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-git-commit-generator)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-green.svg)](https://github.com/M1n-74316D65/vscode-git-commit-generator)
 
-## Features
+AI-powered Git commit message generator for VS Code using GitHub Copilot's Language Model API. Generates commit messages following multiple industry-standard formats including Gitmoji + Conventional Commits.
 
-- ✨ **Gitmoji + Conventional Commits**: Generate commit messages with emojis and standardized format
+## ✨ Features
+
+- 🤖 **15 Commit Styles**: Conventional Commits, Angular, Atom, ESLint, Linux Kernel, and more
 - 🌍 **Multi-language Support**: English and Spanish (auto-detects from VS Code locale)
+- ✨ **Gitmoji Integration**: Optional emoji prefixes with independent toggle
 - 📝 **Smart Body Generation**: Automatically generates detailed descriptions for complex changes
 - 📚 **Context Awareness**: Uses recent commit history to maintain consistency
-- 🤖 **Powered by GitHub Copilot**: No API keys needed, uses VS Code's built-in LLM
+- 🎨 **Multiple Styles**: Choose from 6 categories of commit conventions
+- ⚡ **Performance**: Model caching and retry logic for reliability
+- 🔒 **Secure**: No API keys needed, uses VS Code's built-in LLM
 
-## Requirements
+## 📋 Requirements
 
 - VS Code 1.90.0 or higher
 - GitHub Copilot extension installed and enabled
 - Git repository in your workspace
 
-## Usage
+## 🚀 Installation
 
-1. **Stage your changes** using the Source Control view
-2. **Click the button** in the Source Control panel or run command:
-   - Command Palette: `Git Commit: Generate Commit Message`
-   - Button: Click the sparkle icon in the Source Control view
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
+3. Search for "Git Commit Message Generator"
+4. Click Install
+
+## 🎯 Usage
+
+### Quick Start
+
+1. **Stage your changes** in the Source Control view
+2. **Click the sparkle icon** ✨ in the Source Control panel
 3. **Review the generated message** in the commit input box
-4. **Edit if needed** and commit manually
+4. **Commit** manually or edit the message as needed
 
-## Configuration
+### Using Commands
 
-Open VS Code settings and search for "Git Commit Generator":
+Open the Command Palette (Ctrl+Shift+P / Cmd+Shift+P) and type:
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `gitCommitGenerator.language` | Commit message language (`auto`, `en`, `es`) | `auto` |
-| `gitCommitGenerator.style` | Message style (`gitmoji-conventional`, `conventional-only`) | `gitmoji-conventional` |
-| `gitCommitGenerator.includeBody` | Generate detailed body for complex changes | `true` |
-| `gitCommitGenerator.bodyThreshold` | Min files changed to trigger body generation | `5` |
-| `gitCommitGenerator.recentCommitsCount` | Number of recent commits for context | `10` |
+- `Git Commit: Generate Commit Message` - Generate a message
+- `Git Commit: Select Commit Style` - Change commit format
+- `Git Commit: Toggle Gitmojis` - Enable/disable emojis
+- `Git Commit: Refresh Available Models` - Update model list
 
-## Examples
+### SCM Panel Buttons
 
-**Simple change:**
+Four convenient buttons grouped together in the Source Control panel:
+
+| Button | Icon | Action |
+|--------|------|--------|
+| Generate | ✨ | Generate commit message |
+| Refresh Models | ☁️ | Refresh and select model |
+| Select Style | 🎨 | Choose commit style |
+| Toggle Gitmojis | 🔘 | Toggle emoji prefixes |
+
+## 🎨 Commit Styles
+
+### ⭐ Popular
+- **Conventional Commits**: `feat: add authentication`
+- **Angular/Google**: `feat(auth): add login`
+- **Atom Editor**: `:sparkles: Add new feature`
+- **ESLint**: `Feat: Add new rule`
+
+### 🔧 Framework
+- **Ember.js**: `[FEATURE] Add computed property`
+- **GraphQL**: `Add user query (feat)`
+- **Ruby on Rails**: `[FEATURE] Add authentication`
+- **Symfony**: `[Feature] Add console command`
+
+### 🛠️ DevOps & Tools
+- **Bitbucket**: `JIRA-123: Add feature`
+- **Docker**: `builder: fix cache`
+- **Karma**: `feat(config): add env support`
+
+### ⚙️ System
+- **jQuery**: `Core: Fix selector`
+- **Linux Kernel**: `net: fix tcp bug`
+
+### 📋 Specialized
+- **Semantic Versioning**: `fix: resolve leak (closes #123)`
+
+### ✨ Minimal
+- **Plain**: `Fix login redirect bug`
+
+## ⚙️ Configuration
+
+Open VS Code settings (Ctrl+, / Cmd+,) and search for "Git Commit Generator":
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `language` | `auto\|en\|es` | `auto` | Message language |
+| `style` | string | `conventional` | Commit format style |
+| `useGitmojis` | boolean | `true` | Include emoji prefixes |
+| `includeBody` | boolean | `true` | Generate detailed body |
+| `bodyThreshold` | number | `5` | Min files for body generation |
+| `recentCommitsCount` | number | `10` | Context commits count |
+| `modelFamily` | string | `gpt-4o` | LLM model family |
+
+## 📖 Examples
+
+### Simple Change
 ```
 ✨ feat(auth): add user authentication
 ```
 
-**Complex change (Spanish):**
+### Complex Change with Body
 ```
-✨ feat(autenticacion): implementar autenticación OAuth2
+✨ feat(api): implement rate limiting
+
+- Add Redis-based rate limiter
+- Configure per-endpoint limits
+- Include retry-after headers
+- Add comprehensive tests
+```
+
+### Spanish Language
+```
+✨ feat(autenticacion): implementar OAuth2
 
 - Añadir integración con Google OAuth
-- Crear mecanismo de refresco de tokens  
-- Implementar almacenamiento seguro de sesión
-- Añadir funcionalidad de cierre de sesión
+- Crear mecanismo de refresco de tokens
+- Implementar almacenamiento seguro
+- Añadir tests completos
 ```
 
-## Supported Commit Types
+## 🛠️ Development
 
-- ✨ `feat`: New feature
-- 🐛 `fix`: Bug fix
-- ⚡ `perf`: Performance improvement
-- 📚 `docs`: Documentation
-- ♻️ `refactor`: Code refactoring
-- ✅ `test`: Tests
-- 🔧 `chore`: Maintenance
-
-## Building from Source
+### Building from Source
 
 ```bash
+# Clone repository
+git clone https://github.com/your-username/vscode-git-commit-generator.git
+cd vscode-git-commit-generator
+
+# Install dependencies
 npm install
+
+# Compile
 npm run compile
+
+# Watch mode
+npm run watch
+
+# Run tests
+npm test
 ```
+
+### Debugging
 
 Press `F5` to open a new VS Code window with the extension loaded.
 
-## License
+## 📄 License
 
-MIT
+[MIT](LICENSE) © Git Commit Generator Contributors
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## 🐛 Known Issues
+
+- Large diffs (>1MB) may be truncated to fit token limits
+- Requires GitHub Copilot to be installed and enabled
+
+## 📮 Support
+
+- [GitHub Issues](https://github.com/your-username/vscode-git-commit-generator/issues)
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-git-commit-generator)
+
+---
+
+**Enjoy generating better commit messages!** ✨

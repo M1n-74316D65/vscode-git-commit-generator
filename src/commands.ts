@@ -9,7 +9,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     'git-commit-generator.generate',
     async () => {
       const translation = ConfigManager.getTranslation();
-      
+
       try {
         // Check for Git repository
         const gitRoot = await GitManager.findGitRepository();
@@ -27,24 +27,35 @@ export function registerCommands(context: vscode.ExtensionContext): void {
           return;
         }
 
-        // Show progress notification
-        await vscode.window.withProgress(
+        // Show progress notification with detailed steps
+        const commitMessage = await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
             title: translation.messages.generating,
-            cancellable: false,
+            cancellable: true,
           },
-          async (progress) => {
+          async (progress, token) => {
+            // Setup cancellation
+            if (token.isCancellationRequested) {
+              return undefined;
+            }
+
             // Get configuration
             const config = ConfigManager.getConfig();
             const language = ConfigManager.getLanguage();
 
-            // Get recent commits for context
-            progress.report({ increment: 20, message: 'Analyzing commit history...' });
-            const recentCommits = await gitManager.getRecentCommits(config.recentCommitsCount);
+            // Get recent commits for context (parallel with other operations)
+            progress.report({ increment: 15, message: 'Analyzing commit history...' });
+            const [recentCommits] = await Promise.all([
+              gitManager.getRecentCommits(config.recentCommitsCount),
+            ]);
+
+            if (token.isCancellationRequested) {
+              return undefined;
+            }
 
             // Build generation context
-            const context: GenerationContext = {
+            const generationContext: GenerationContext = {
               diff: diff.content,
               language,
               style: config.style,
@@ -54,43 +65,50 @@ export function registerCommands(context: vscode.ExtensionContext): void {
               stats: diff.stats,
             };
 
-            // Generate commit message
-            progress.report({ increment: 40, message: 'Generating message...' });
-            const commitMessage = await LLMManager.generateCommitMessage(context);
+            // Generate commit message with progress reporting
+            const result = await LLMManager.generateCommitMessage(generationContext, progress);
 
-            if (!commitMessage) {
-              throw new Error('Failed to generate commit message');
+            if (token.isCancellationRequested) {
+              return undefined;
             }
 
-            // Format the final message
-            let fullMessage = commitMessage.subject;
-            if (commitMessage.body) {
-              fullMessage += '\n\n' + commitMessage.body;
-            }
-
-            // Set the message in the Git input box
-            progress.report({ increment: 30, message: 'Setting message...' });
-            const success = await gitManager.setCommitMessage(fullMessage);
-
-            if (!success) {
-              throw new Error('Failed to set commit message in Git input box');
-            }
-
-            progress.report({ increment: 10, message: 'Done!' });
+            return result;
           }
         );
 
-        // Show success message
-        vscode.window.showInformationMessage(translation.messages.generated);
+        if (!commitMessage) {
+          return;
+        }
+
+        // Format the final message
+        let fullMessage = commitMessage.subject;
+        if (commitMessage.body) {
+          fullMessage += '\n\n' + commitMessage.body;
+        }
+
+        // Set the message in the Git input box
+        const success = await gitManager.setCommitMessage(fullMessage);
+
+        if (!success) {
+          throw new Error('Failed to set commit message in Git input box');
+        }
+
+        // Show success message with details
+        const details = commitMessage.body
+          ? `${commitMessage.subject} (+ body)`
+          : commitMessage.subject;
+        vscode.window.showInformationMessage(
+          `${translation.messages.generated} ${details.substring(0, 50)}${details.length > 50 ? '...' : ''}`
+        );
 
       } catch (error) {
         console.error('Error in generate command:', error);
-        
+
         let errorMessage = translation.messages.error;
         if (error instanceof Error) {
           errorMessage = errorMessage.replace('{0}', error.message);
         }
-        
+
         vscode.window.showErrorMessage(errorMessage);
       }
     }

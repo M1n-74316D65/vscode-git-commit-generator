@@ -1,9 +1,18 @@
 {
-  "name": "vscode-git-commit-generator",
-  "displayName": "Git Commit Message Generator",
+  "name": "vscode-llm-api-git-commit-generator",
+  "displayName": "Git Commit Message Generator - LLM API",
   "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
-  "version": "0.0.1",
-  "publisher": "your-publisher-id",
+  "version": "1.0.0",
+  "publisher": "m1n",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/M1n-74316D65/vscode-git-commit-generator"
+  },
+  "homepage": "https://github.com/M1n-74316D65/vscode-git-commit-generator",
+  "bugs": {
+    "url": "https://github.com/M1n-74316D65/vscode-git-commit-generator/issues"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -222,6 +231,11 @@
           ],
           "default": null,
           "description": "Selected model vendor (set automatically when you select a model)"
+        },
+        "gitCommitGenerator.hasShownWelcome": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the welcome message has been shown (internal)"
         }
       }
     }

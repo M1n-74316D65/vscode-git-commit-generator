@@ -2,76 +2,217 @@ import * as vscode from 'vscode';
 import { GenerationContext, CommitMessage, CommitStyle } from './types';
 import { ConfigManager } from './config';
 
+// Constants
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+const MAX_DIFF_LENGTH = 15000;
+const MODEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CachedModels {
+  models: vscode.LanguageModelChat[];
+  timestamp: number;
+}
+
 export class LLMManager {
-  static async generateCommitMessage(context: GenerationContext): Promise<CommitMessage | undefined> {
+  private static modelCache: CachedModels | null = null;
+  private static currentRetryAttempt = 0;
+
+  /**
+   * Generate a commit message using VS Code's Language Model API
+   */
+  static async generateCommitMessage(
+    context: GenerationContext,
+    progress?: vscode.Progress<{ message?: string; increment?: number }>
+  ): Promise<CommitMessage | undefined> {
     const translation = ConfigManager.getTranslation();
-    
+    this.currentRetryAttempt = 0;
+
     try {
-      // Get user's preferred model from config
-      const config = vscode.workspace.getConfiguration('gitCommitGenerator');
-      const preferredFamily = config.get<string>('modelFamily', 'gpt-4o');
-      const preferredId = config.get<string | undefined>('modelId', undefined);
-      
-      // Try to get the preferred model, or any available model
-      let models: vscode.LanguageModelChat[] = [];
-      
-      if (preferredId) {
-        // Try to find the specific model by ID
-        models = await vscode.lm.selectChatModels({ id: preferredId });
-      }
-      
-      if (models.length === 0) {
-        // Try to find by family
-        models = await vscode.lm.selectChatModels({ family: preferredFamily });
-      }
-      
-      if (models.length === 0) {
-        // Get any available model
-        models = await vscode.lm.selectChatModels({});
+      progress?.report({ increment: 10, message: translation.messages.analyzingModel });
+
+      // Get available model with fallback strategy
+      const model = await this.getAvailableModel();
+      if (!model) {
+        throw new Error(translation.messages.noModelsAvailable);
       }
 
-      if (models.length === 0) {
-        throw new Error('No language models available. Please install GitHub Copilot.');
-      }
+      progress?.report({ increment: 20, message: translation.messages.buildingPrompt });
 
-      // Use the first available model
-      const model = models[0];
-      console.log(`Using model: ${model.name} (${model.family})`);
-
-      // Build the prompt with style-specific instructions
+      // Build the prompt
       const messages = this.buildPrompt(context, translation.systemPrompt);
 
-      // Send request to LLM
-      const cancellationTokenSource = new vscode.CancellationTokenSource();
-      const response = await model.sendRequest(
-        messages,
-        {},
-        cancellationTokenSource.token
-      );
+      progress?.report({ increment: 30, message: translation.messages.generating });
 
-      // Collect the response
-      let fullMessage = '';
-      for await (const fragment of response.text) {
-        fullMessage += fragment;
-      }
+      // Send request with retry logic
+      const fullMessage = await this.sendRequestWithRetry(model, messages);
 
-      // Parse the commit message
-      return this.parseCommitMessage(fullMessage.trim());
+      progress?.report({ increment: 30, message: translation.messages.parsingResponse });
+
+      // Parse the response
+      const commitMessage = this.parseCommitMessage(fullMessage.trim());
+
+      progress?.report({ increment: 10, message: translation.messages.done });
+
+      return commitMessage;
     } catch (error) {
-      if (error instanceof vscode.LanguageModelError) {
-        throw this.handleLMError(error);
-      }
-      throw error;
+      this.handleGenerationError(error);
+      return undefined;
     }
   }
 
+  /**
+   * Get available model with intelligent fallback strategy
+   */
+  private static async getAvailableModel(): Promise<vscode.LanguageModelChat | null> {
+    const config = vscode.workspace.getConfiguration('gitCommitGenerator');
+    const preferredFamily = config.get<string>('modelFamily', 'gpt-4o');
+    const preferredId = config.get<string | null>('modelId', null);
+
+    // Check cache first
+    if (this.modelCache && Date.now() - this.modelCache.timestamp < MODEL_CACHE_TTL_MS) {
+      const cached = this.modelCache.models.find(m => {
+        if (preferredId) return m.id === preferredId;
+        if (preferredFamily) return m.family === preferredFamily;
+        return true;
+      });
+        if (cached) {
+        return cached;
+      }
+    }
+
+    try {
+      // Strategy 1: Try preferred model by ID
+      if (preferredId) {
+        const models = await vscode.lm.selectChatModels({ id: preferredId });
+        if (models.length > 0) {
+          this.cacheModels(models);
+          return models[0];
+        }
+      }
+
+      // Strategy 2: Try preferred model by family
+      if (preferredFamily) {
+        const models = await vscode.lm.selectChatModels({ family: preferredFamily });
+        if (models.length > 0) {
+          this.cacheModels(models);
+          return models[0];
+        }
+      }
+
+      // Strategy 3: Get any available model
+      const models = await vscode.lm.selectChatModels({});
+      if (models.length > 0) {
+        this.cacheModels(models);
+        return models[0];
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Cache available models
+   */
+  private static cacheModels(models: vscode.LanguageModelChat[]): void {
+    this.modelCache = {
+      models,
+      timestamp: Date.now()
+    };
+  }
+
+  /**
+   * Clear model cache
+   */
+  static clearModelCache(): void {
+    this.modelCache = null;
+  }
+
+  /**
+   * Send request with retry logic
+   */
+  private static async sendRequestWithRetry(
+    model: vscode.LanguageModelChat,
+    messages: vscode.LanguageModelChatMessage[]
+  ): Promise<string> {
+    const translation = ConfigManager.getTranslation();
+
+    while (this.currentRetryAttempt < MAX_RETRIES) {
+      try {
+        const cancellationTokenSource = new vscode.CancellationTokenSource();
+        const response = await model.sendRequest(
+          messages,
+          {},
+          cancellationTokenSource.token
+        );
+
+        // Collect the response
+        let fullMessage = '';
+        for await (const fragment of response.text) {
+          fullMessage += fragment;
+        }
+
+        return fullMessage;
+      } catch (error) {
+        this.currentRetryAttempt++;
+
+        if (this.currentRetryAttempt >= MAX_RETRIES) {
+          throw error;
+        }
+
+        // Check if error is retryable
+        if (error instanceof vscode.LanguageModelError) {
+          const isRetryable = this.isRetryableError(error);
+          if (!isRetryable) {
+            throw error;
+          }
+        }
+
+        // Wait before retrying
+        await this.delay(RETRY_DELAY_MS * this.currentRetryAttempt);
+      }
+    }
+
+    throw new Error(translation.messages.maxRetriesExceeded);
+  }
+
+  /**
+   * Check if error is retryable
+   */
+  private static isRetryableError(error: vscode.LanguageModelError): boolean {
+    if (error.cause instanceof Error) {
+      const causeMessage = error.cause.message.toLowerCase();
+      // Retry on rate limits, timeouts, and temporary errors
+      return (
+        causeMessage.includes('rate_limit') ||
+        causeMessage.includes('timeout') ||
+        causeMessage.includes('temporarily') ||
+        causeMessage.includes('503') ||
+        causeMessage.includes('502') ||
+        causeMessage.includes('504')
+      );
+    }
+    return false;
+  }
+
+  /**
+   * Delay utility
+   */
+  private static delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Build the prompt for the LLM
+   */
   private static buildPrompt(
     context: GenerationContext,
     systemPrompt: string
   ): vscode.LanguageModelChatMessage[] {
     const messages: vscode.LanguageModelChatMessage[] = [];
 
-    // Base system prompt
+    // Build system prompt with style and configuration
     let prompt = systemPrompt;
 
     // Add style-specific instructions
@@ -96,12 +237,10 @@ export class LLMManager {
 
     messages.push(vscode.LanguageModelChatMessage.User(prompt));
 
-    // Add the git diff
-    // Truncate if too long (rough estimate: 1 token ≈ 4 characters)
-    const maxDiffLength = 15000; // Conservative limit
+    // Add the git diff (truncate if necessary)
     let diff = context.diff;
-    if (diff.length > maxDiffLength) {
-      diff = diff.substring(0, maxDiffLength) + '\n\n[Diff truncated due to length...]';
+    if (diff.length > MAX_DIFF_LENGTH) {
+      diff = diff.substring(0, MAX_DIFF_LENGTH) + '\n\n[Diff truncated due to length...]';
     }
 
     messages.push(vscode.LanguageModelChatMessage.User(`Git diff:\n${diff}`));
@@ -109,9 +248,12 @@ export class LLMManager {
     return messages;
   }
 
+  /**
+   * Get style-specific instructions
+   */
   private static getStyleInstructions(style: CommitStyle, useGitmojis: boolean): string {
     const emojiPrefix = useGitmojis ? '✨ ' : '';
-    
+
     const styleRules: Record<CommitStyle, string> = {
       conventional: `Use Conventional Commits format: ${emojiPrefix}type: subject
 - Types: feat, fix, perf, docs, refactor, test, chore
@@ -187,11 +329,13 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
     return styleRules[style] || styleRules.conventional;
   }
 
+  /**
+   * Parse the LLM response into a CommitMessage
+   */
   private static parseCommitMessage(fullMessage: string): CommitMessage {
     const lines = fullMessage.split('\n');
-    
+
     if (lines.length === 1) {
-      // Only subject line
       return { subject: this.cleanSubject(lines[0]) };
     }
 
@@ -202,46 +346,72 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
     }
 
     const subject = this.cleanSubject(lines[subjectIndex]);
-    
+
     // The rest is the body (skip empty lines after subject)
     let bodyStart = subjectIndex + 1;
     while (bodyStart < lines.length && lines[bodyStart].trim() === '') {
       bodyStart++;
     }
 
-    const body = bodyStart < lines.length 
+    const body = bodyStart < lines.length
       ? lines.slice(bodyStart).join('\n').trim()
       : undefined;
 
     return { subject, body };
   }
 
+  /**
+   * Clean the subject line
+   */
   private static cleanSubject(subject: string): string {
-    // Remove quotes if present and trim whitespace only
     return subject
       .replace(/^["']|["']$/g, '')
       .replace(/^\s+|\s+$/g, '');
   }
 
-  private static handleLMError(error: vscode.LanguageModelError): Error {
+  /**
+   * Handle generation errors with user-friendly messages
+   */
+  private static handleGenerationError(error: unknown): void {
     const translation = ConfigManager.getTranslation();
-    
+    let errorMessage = translation.messages.error;
+
+    if (error instanceof vscode.LanguageModelError) {
+      errorMessage = this.handleLMError(error);
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    console.error('Error generating commit message:', error);
+    vscode.window.showErrorMessage(errorMessage);
+  }
+
+  /**
+   * Handle Language Model specific errors
+   */
+  private static handleLMError(error: vscode.LanguageModelError): string {
+    const translation = ConfigManager.getTranslation();
+
     if (error.cause instanceof Error) {
-      const causeMessage = error.cause.message;
-      
+      const causeMessage = error.cause.message.toLowerCase();
+
       if (causeMessage.includes('off_topic')) {
-        return new Error('The changes are not suitable for commit message generation');
+        return translation.messages.offTopicError;
       }
-      
+
       if (causeMessage.includes('rate_limit')) {
-        return new Error(translation.messages.rateLimited);
+        return translation.messages.rateLimited;
       }
-      
+
       if (causeMessage.includes('consent')) {
-        return new Error(translation.messages.llmConsentRequired);
+        return translation.messages.llmConsentRequired;
+      }
+
+      if (causeMessage.includes('quota')) {
+        return translation.messages.quotaExceeded;
       }
     }
 
-    return new Error(`${translation.messages.error.replace('{0}', error.message)}`);
+    return translation.messages.error.replace('{0}', error.message);
   }
 }

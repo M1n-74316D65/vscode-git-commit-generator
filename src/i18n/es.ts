@@ -41,7 +41,14 @@ Para generación de cuerpo (cuando hay muchos cambios):
     gitmojisDisabled: '⭕ Gitmojis desactivados',
     currentStyle: 'Actual: {0}',
     selectStyle: 'Seleccionar estilo de mensaje de commit',
-    toggleGitmojis: 'Activar/Desactivar Gitmojis',
+    toggleGitmojis: 'Activar/Desactivar Gitmijos',
+    analyzingModel: 'Analizando modelos disponibles...',
+    buildingPrompt: 'Construyendo prompt...',
+    parsingResponse: 'Analizando respuesta...',
+    done: '¡Listo!',
+    maxRetriesExceeded: 'Se excedieron los intentos máximos. Por favor intenta de nuevo más tarde.',
+    offTopicError: 'Los cambios no son adecuados para generación de mensajes de commit.',
+    quotaExceeded: 'Cuota de API excedida. Por favor intenta de nuevo más tarde.',
   },
 
   commitTypes: {

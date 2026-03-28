@@ -42,6 +42,13 @@ For body generation (when there are many changes):
     currentStyle: 'Current: {0}',
     selectStyle: 'Select commit message style',
     toggleGitmojis: 'Toggle Gitmojis On/Off',
+    analyzingModel: 'Analyzing available models...',
+    buildingPrompt: 'Building prompt...',
+    parsingResponse: 'Parsing response...',
+    done: 'Done!',
+    maxRetriesExceeded: 'Maximum retry attempts exceeded. Please try again later.',
+    offTopicError: 'The changes are not suitable for commit message generation.',
+    quotaExceeded: 'API quota exceeded. Please try again later.',
   },
 
   commitTypes: {

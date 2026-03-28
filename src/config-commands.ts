@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './config';
+import { LLMManager } from './llm';
 import { CommitStyle } from './types';
 
 // Style definitions with categories for QuickPick
@@ -131,7 +132,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
     async () => {
       await vscode.commands.executeCommand(
         'workbench.action.openSettings',
-        '@ext:your-publisher-id.vscode-git-commit-generator'
+        '@ext:m1n.vscode-git-commit-generator'
       );
     }
   );
@@ -140,6 +141,9 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
   const refreshModelsDisposable = vscode.commands.registerCommand(
     'git-commit-generator.refreshModels',
     async () => {
+      // Clear the cache first to force fresh model fetch
+      LLMManager.clearModelCache();
+      
       // First refresh models, then automatically open the selector
       await vscode.window.withProgress(
         {
@@ -172,6 +176,9 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
               }
               return;
             }
+            
+            // Cache the models
+            LLMManager.clearModelCache(); // Clear first
             
             // Success - now open the model selector
             vscode.window.showInformationMessage(

@@ -22,7 +22,8 @@ export class LLMManager {
    */
   static async generateCommitMessage(
     context: GenerationContext,
-    progress?: vscode.Progress<{ message?: string; increment?: number }>
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken
   ): Promise<CommitMessage | undefined> {
     const translation = ConfigManager.getTranslation();
     this.currentRetryAttempt = 0;
@@ -44,7 +45,7 @@ export class LLMManager {
       progress?.report({ increment: 30, message: translation.messages.generating });
 
       // Send request with retry logic
-      const fullMessage = await this.sendRequestWithRetry(model, messages);
+      const fullMessage = await this.sendRequestWithRetry(model, messages, cancellationToken);
 
       progress?.report({ increment: 30, message: translation.messages.parsingResponse });
 
@@ -134,17 +135,17 @@ export class LLMManager {
    */
   private static async sendRequestWithRetry(
     model: vscode.LanguageModelChat,
-    messages: vscode.LanguageModelChatMessage[]
+    messages: vscode.LanguageModelChatMessage[],
+    cancellationToken?: vscode.CancellationToken
   ): Promise<string> {
     const translation = ConfigManager.getTranslation();
 
     while (this.currentRetryAttempt < MAX_RETRIES) {
       try {
-        const cancellationTokenSource = new vscode.CancellationTokenSource();
         const response = await model.sendRequest(
           messages,
           {},
-          cancellationTokenSource.token
+          cancellationToken
         );
 
         // Collect the response
@@ -158,6 +159,10 @@ export class LLMManager {
         this.currentRetryAttempt++;
 
         if (this.currentRetryAttempt >= MAX_RETRIES) {
+          throw error;
+        }
+
+        if (cancellationToken?.isCancellationRequested) {
           throw error;
         }
 
@@ -220,7 +225,13 @@ export class LLMManager {
     prompt += '\n\n' + styleInstructions;
 
     // Add body generation instructions
-    if (context.includeBody && context.stats.filesChanged >= 5) {
+    if (context.language === 'es') {
+      prompt += '\n\nWrite the commit message in Spanish.';
+    } else {
+      prompt += '\n\nWrite the commit message in English.';
+    }
+
+    if (context.includeBody) {
       prompt += '\n\nThis is a complex change with multiple files. Include a detailed body explaining the changes.';
     } else {
       prompt += '\n\nGenerate ONLY the subject line, no body needed.';

@@ -82,12 +82,12 @@
         },
         {
           "command": "git-commit-generator.selectStyle",
-          "group": "2_configure",
+          "group": "navigation",
           "when": "scmProvider == git"
         },
         {
           "command": "git-commit-generator.toggleGitmojis",
-          "group": "2_configure",
+          "group": "navigation",
           "when": "scmProvider == git"
         }
       ],

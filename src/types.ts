@@ -9,10 +9,28 @@ export interface GitDiff {
   stats: GitDiffStats;
 }
 
+export type CommitStyle = 
+  | 'conventional'
+  | 'angular'
+  | 'atom'
+  | 'eslint'
+  | 'jquery'
+  | 'ember'
+  | 'linux'
+  | 'symfony'
+  | 'rails'
+  | 'graphql'
+  | 'docker'
+  | 'karma'
+  | 'semantic'
+  | 'plain'
+  | 'bitbucket';
+
 export interface GenerationContext {
   diff: string;
   language: string;
-  style: 'gitmoji-conventional' | 'conventional-only';
+  style: CommitStyle;
+  useGitmojis: boolean;
   recentCommits: string[];
   includeBody: boolean;
   stats: GitDiffStats;
@@ -25,7 +43,8 @@ export interface CommitMessage {
 
 export interface ExtensionConfig {
   language: 'auto' | 'en' | 'es';
-  style: 'gitmoji-conventional' | 'conventional-only';
+  style: CommitStyle;
+  useGitmojis: boolean;
   includeBody: boolean;
   bodyThreshold: number;
   recentCommitsCount: number;

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GenerationContext, CommitMessage } from './types';
+import { GenerationContext, CommitMessage, CommitStyle } from './types';
 import { ConfigManager } from './config';
 
 export class LLMManager {
@@ -38,7 +38,7 @@ export class LLMManager {
       const model = models[0];
       console.log(`Using model: ${model.name} (${model.family})`);
 
-      // Build the prompt
+      // Build the prompt with style-specific instructions
       const messages = this.buildPrompt(context, translation.systemPrompt);
 
       // Send request to LLM
@@ -71,13 +71,12 @@ export class LLMManager {
   ): vscode.LanguageModelChatMessage[] {
     const messages: vscode.LanguageModelChatMessage[] = [];
 
-    // System prompt with instructions
+    // Base system prompt
     let prompt = systemPrompt;
 
-    // Add style information
-    if (context.style === 'conventional-only') {
-      prompt += '\n\nUse Conventional Commits format WITHOUT emojis.';
-    }
+    // Add style-specific instructions
+    const styleInstructions = this.getStyleInstructions(context.style, context.useGitmojis);
+    prompt += '\n\n' + styleInstructions;
 
     // Add body generation instructions
     if (context.includeBody && context.stats.filesChanged >= 5) {
@@ -108,6 +107,84 @@ export class LLMManager {
     messages.push(vscode.LanguageModelChatMessage.User(`Git diff:\n${diff}`));
 
     return messages;
+  }
+
+  private static getStyleInstructions(style: CommitStyle, useGitmojis: boolean): string {
+    const emojiPrefix = useGitmojis ? '✨ ' : '';
+    
+    const styleRules: Record<CommitStyle, string> = {
+      conventional: `Use Conventional Commits format: ${emojiPrefix}type: subject
+- Types: feat, fix, perf, docs, refactor, test, chore
+${useGitmojis ? '- Add appropriate emoji before the type' : ''}`,
+
+      angular: `Use Angular/Google format: ${emojiPrefix}type(scope): subject
+- type(scope): short description
+- Example: ${emojiPrefix}feat(auth): add login functionality
+${useGitmojis ? '- Add emoji before type(scope)' : ''}`,
+
+      atom: `Use Atom Editor format: :emoji: subject
+- Start with an emoji that represents the change
+- Example: :sparkles: Add new feature
+- Keep it simple and expressive`,
+
+      eslint: `Use ESLint format: Tag: Subject
+- Tag: Build, Chore, Docs, Feat, Fix, Perf, Test, etc.
+- Capitalize the tag
+- Example: Feat: Add new rule`,
+
+      jquery: `Use jQuery format: Component: Subject
+- Component: What part of the code changed
+- Keep it short and clear
+- Example: Core: Fix selector bug`,
+
+      ember: `Use Ember.js format: [TAG] subject
+- TAG in brackets: [FEATURE], [BUGFIX], [DOC], [CLEANUP]
+- Example: [FEATURE] Add computed property`,
+
+      linux: `Use Linux Kernel format: subsystem: subject
+- subsystem: area of code (e.g., net, fs, drivers)
+- Lowercase, no brackets
+- Example: net: fix tcp connection bug`,
+
+      symfony: `Use Symfony format: [Type] Subject
+- [Type] in brackets: [Feature], [Bugfix], [Minor], etc.
+- Example: [Feature] Add new console command`,
+
+      rails: `Use Ruby on Rails format: [tag] subject
+- [tag]: [FEATURE], [FIX], [DOC], [CHORE]
+- Example: [FEATURE] Add user authentication`,
+
+      graphql: `Use GraphQL format: subject (type)
+- Description followed by type in parentheses
+- Example: Add user query (feat)`,
+
+      docker: `Use Docker format: scope: subject
+- scope: area/component affected
+- Lowercase scope
+- Example: builder: fix cache issue`,
+
+      karma: `Use Karma Runner format: ${emojiPrefix}type(scope): subject
+- type(scope): description
+- Example: ${emojiPrefix}feat(config): add env support
+${useGitmojis ? '- Include appropriate emoji' : ''}`,
+
+      semantic: `Use Semantic Versioning format: ${emojiPrefix}type: subject (closes #X)
+- Include issue reference when applicable
+- Example: ${emojiPrefix}fix: resolve memory leak (closes #123)
+${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
+
+      plain: `Use Plain Simple format: Subject
+- Just a clear description of the change
+- No prefixes, no special formatting
+- Example: Fix login redirect bug`,
+
+      bitbucket: `Use Bitbucket format: PROJECT-123: subject
+- Start with JIRA issue key
+- Example: PROJ-456: Add user dashboard
+- Or without issue: Subject only`,
+    };
+
+    return styleRules[style] || styleRules.conventional;
   }
 
   private static parseCommitMessage(fullMessage: string): CommitMessage {

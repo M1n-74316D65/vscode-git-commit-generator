@@ -22,7 +22,9 @@
     "copilot"
   ],
   "activationEvents": [
-    "onCommand:git-commit-generator.generate"
+    "onCommand:git-commit-generator.generate",
+    "onCommand:git-commit-generator.selectStyle",
+    "onCommand:git-commit-generator.toggleGitmojis"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -37,7 +39,9 @@
       {
         "command": "git-commit-generator.selectModel",
         "title": "Select Language Model",
-        "category": "Git Commit"
+        "category": "Git Commit",
+        "icon": "$(refresh)",
+        "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.openSettings",
@@ -48,6 +52,20 @@
         "command": "git-commit-generator.refreshModels",
         "title": "Refresh Available Models",
         "category": "Git Commit"
+      },
+      {
+        "command": "git-commit-generator.selectStyle",
+        "title": "Select Commit Style",
+        "category": "Git Commit",
+        "icon": "$(symbol-color)",
+        "enablement": "gitOpenRepositoryCount > 0"
+      },
+      {
+        "command": "git-commit-generator.toggleGitmojis",
+        "title": "Toggle Gitmojis",
+        "category": "Git Commit",
+        "icon": "$(symbol-enum)",
+        "enablement": "gitOpenRepositoryCount > 0"
       }
     ],
     "menus": {
@@ -59,6 +77,16 @@
         },
         {
           "command": "git-commit-generator.selectModel",
+          "group": "navigation",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "git-commit-generator.selectStyle",
+          "group": "2_configure",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "git-commit-generator.toggleGitmojis",
           "group": "2_configure",
           "when": "scmProvider == git"
         }
@@ -66,6 +94,14 @@
       "commandPalette": [
         {
           "command": "git-commit-generator.generate",
+          "when": "gitOpenRepositoryCount > 0"
+        },
+        {
+          "command": "git-commit-generator.selectStyle",
+          "when": "gitOpenRepositoryCount > 0"
+        },
+        {
+          "command": "git-commit-generator.toggleGitmojis",
           "when": "gitOpenRepositoryCount > 0"
         }
       ]
@@ -90,16 +126,47 @@
         },
         "gitCommitGenerator.style": {
           "type": "string",
-          "default": "gitmoji-conventional",
+          "default": "conventional",
           "enum": [
-            "gitmoji-conventional",
-            "conventional-only"
+            "conventional",
+            "angular",
+            "atom",
+            "eslint",
+            "jquery",
+            "ember",
+            "linux",
+            "symfony",
+            "rails",
+            "graphql",
+            "docker",
+            "karma",
+            "semantic",
+            "plain",
+            "bitbucket"
           ],
           "enumDescriptions": [
-            "Gitmoji + Conventional Commits (e.g., ✨ feat: add feature)",
-            "Conventional Commits only (e.g., feat: add feature)"
+            "Conventional Commits - type: description",
+            "Angular/Google - type(scope): description",
+            "Atom Editor - :emoji: description",
+            "ESLint - Tag: Description",
+            "jQuery - Component: Short description",
+            "Ember.js - [TAG] short description",
+            "Linux Kernel - subsystem: description",
+            "Symfony - [Type] Description",
+            "Rails - [Tag] description",
+            "GraphQL - description (type)",
+            "Docker - scope: description",
+            "Karma - type(scope): description",
+            "Semantic - type: description (closes #X)",
+            "Plain - Description",
+            "Bitbucket - JIRA-123: description"
           ],
           "description": "Commit message style format"
+        },
+        "gitCommitGenerator.useGitmojis": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Gitmoji emoji prefixes in commit messages"
         },
         "gitCommitGenerator.includeBody": {
           "type": "boolean",

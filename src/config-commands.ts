@@ -1,5 +1,54 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './config';
+import { CommitStyle } from './types';
+
+// Style definitions with categories for QuickPick
+interface StyleDefinition {
+  id: CommitStyle;
+  label: string;
+  format: string;
+  category: string;
+  categoryIcon: string;
+}
+
+const styles: StyleDefinition[] = [
+  // Popular
+  { id: 'conventional', label: 'Conventional Commits', format: 'type: description', category: 'popular', categoryIcon: '⭐' },
+  { id: 'angular', label: 'Angular/Google', format: 'type(scope): description', category: 'popular', categoryIcon: '⭐' },
+  { id: 'atom', label: 'Atom Editor', format: ':emoji: description', category: 'popular', categoryIcon: '⭐' },
+  { id: 'eslint', label: 'ESLint', format: 'Tag: Description', category: 'popular', categoryIcon: '⭐' },
+  // Framework
+  { id: 'ember', label: 'Ember.js', format: '[TAG] short description', category: 'framework', categoryIcon: '🔧' },
+  { id: 'graphql', label: 'GraphQL', format: 'description (type)', category: 'framework', categoryIcon: '🔧' },
+  { id: 'rails', label: 'Ruby on Rails', format: '[Tag] description', category: 'framework', categoryIcon: '🔧' },
+  { id: 'symfony', label: 'Symfony', format: '[Type] Description', category: 'framework', categoryIcon: '🔧' },
+  // DevOps & Tools
+  { id: 'bitbucket', label: 'Bitbucket', format: 'JIRA-123: description', category: 'devops', categoryIcon: '🛠️' },
+  { id: 'docker', label: 'Docker', format: 'scope: description', category: 'devops', categoryIcon: '🛠️' },
+  { id: 'karma', label: 'Karma Runner', format: 'type(scope): description', category: 'devops', categoryIcon: '🛠️' },
+  // System
+  { id: 'jquery', label: 'jQuery', format: 'Component: Short description', category: 'system', categoryIcon: '⚙️' },
+  { id: 'linux', label: 'Linux Kernel', format: 'subsystem: description', category: 'system', categoryIcon: '⚙️' },
+  // Specialized
+  { id: 'semantic', label: 'Semantic Versioning', format: 'type: description (closes #X)', category: 'specialized', categoryIcon: '📋' },
+  // Minimal
+  { id: 'plain', label: 'Plain Simple', format: 'Description', category: 'minimal', categoryIcon: '✨' },
+];
+
+// Group styles by category
+function groupStylesByCategory(styles: StyleDefinition[]): Map<string, StyleDefinition[]> {
+  const grouped = new Map<string, StyleDefinition[]>();
+  const categoryOrder = ['popular', 'framework', 'devops', 'system', 'specialized', 'minimal'];
+  
+  categoryOrder.forEach(cat => {
+    const categoryStyles = styles.filter(s => s.category === cat);
+    if (categoryStyles.length > 0) {
+      grouped.set(cat, categoryStyles);
+    }
+  });
+  
+  return grouped;
+}
 
 export function registerConfigCommands(context: vscode.ExtensionContext): void {
   // Command to select language model
@@ -87,20 +136,20 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
     }
   );
 
-  // Command to refresh/check available models
+  // Command to refresh/check available models and open selector
   const refreshModelsDisposable = vscode.commands.registerCommand(
     'git-commit-generator.refreshModels',
     async () => {
-      const translation = ConfigManager.getTranslation();
-      
+      // First refresh models, then automatically open the selector
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Checking available language models...',
+          title: 'Refreshing available language models...',
           cancellable: false
         },
         async () => {
           try {
+            // Refresh the models (this caches them in VS Code)
             const models = await vscode.lm.selectChatModels({});
             
             if (models.length === 0) {
@@ -121,25 +170,107 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
                   '@ext:GitHub.copilot'
                 );
               }
-            } else {
-              const modelList = models.map(m => `${m.name} (${m.family})`).join(', ');
-              vscode.window.showInformationMessage(
-                `✅ Found ${models.length} available model(s): ${modelList}`
-              );
+              return;
             }
+            
+            // Success - now open the model selector
+            vscode.window.showInformationMessage(
+              `✅ Found ${models.length} available model(s). Opening selector...`
+            );
           } catch (error) {
             vscode.window.showErrorMessage(
-              `Error checking models: ${error instanceof Error ? error.message : String(error)}`
+              `Error refreshing models: ${error instanceof Error ? error.message : String(error)}`
             );
+            return;
           }
         }
       );
+      
+      // Open the model selector after refresh completes
+      await vscode.commands.executeCommand('git-commit-generator.selectModel');
+    }
+  );
+
+  // Command to select commit style
+  const selectStyleDisposable = vscode.commands.registerCommand(
+    'git-commit-generator.selectStyle',
+    async () => {
+      const config = vscode.workspace.getConfiguration('gitCommitGenerator');
+      const currentStyle = config.get<string>('style', 'conventional') as CommitStyle;
+      const translation = ConfigManager.getTranslation();
+      
+      const groupedStyles = groupStylesByCategory(styles);
+      const categoryNames: Record<string, string> = {
+        popular: translation.categories.popular,
+        framework: translation.categories.framework,
+        devops: translation.categories.devops,
+        system: translation.categories.system,
+        specialized: translation.categories.specialized,
+        minimal: translation.categories.minimal,
+      };
+      
+      const quickPickItems: (vscode.QuickPickItem & { styleId?: CommitStyle })[] = [];
+      
+      groupedStyles.forEach((categoryStyles, categoryKey) => {
+        // Add category header
+        quickPickItems.push({
+          label: categoryNames[categoryKey] || categoryKey,
+          kind: vscode.QuickPickItemKind.Separator
+        });
+        
+        // Add styles in this category
+        categoryStyles.forEach(style => {
+          quickPickItems.push({
+            label: style.label,
+            description: style.format,
+            detail: style.id === currentStyle ? `$(check) ${translation.messages.currentStyle.replace('{0}', style.label)}` : '',
+            styleId: style.id,
+            picked: style.id === currentStyle
+          });
+        });
+      });
+      
+      const selected = await vscode.window.showQuickPick(quickPickItems, {
+        placeHolder: translation.messages.selectStyle,
+        title: `${translation.categories.popular.split(' ')[0]} - 15 Styles`,
+        ignoreFocusOut: true,
+        matchOnDescription: true
+      });
+      
+      if (selected?.styleId) {
+        await config.update('style', selected.styleId, true);
+        const styleName = translation.styles[selected.styleId];
+        vscode.window.showInformationMessage(
+          translation.messages.styleChanged.replace('{0}', styleName)
+        );
+      }
+    }
+  );
+
+  // Command to toggle gitmojis
+  const toggleGitmojisDisposable = vscode.commands.registerCommand(
+    'git-commit-generator.toggleGitmojis',
+    async () => {
+      const config = vscode.workspace.getConfiguration('gitCommitGenerator');
+      const currentValue = config.get<boolean>('useGitmojis', true);
+      const translation = ConfigManager.getTranslation();
+      
+      const newValue = !currentValue;
+      await config.update('useGitmojis', newValue, true);
+      
+      if (newValue) {
+        vscode.window.showInformationMessage(translation.messages.gitmojisEnabled);
+      } else {
+        vscode.window.showInformationMessage(translation.messages.gitmojisDisabled);
+      }
     }
   );
 
   context.subscriptions.push(
     selectModelDisposable,
     openSettingsDisposable,
-    refreshModelsDisposable
+    refreshModelsDisposable,
+    selectStyleDisposable,
+    toggleGitmojisDisposable
   );
 }

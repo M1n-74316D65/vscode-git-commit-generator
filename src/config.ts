@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ExtensionConfig } from './types';
+import { ExtensionConfig, CommitStyle } from './types';
 import { getTranslation } from './i18n';
 
 export class ConfigManager {
@@ -8,7 +8,8 @@ export class ConfigManager {
     
     return {
       language: config.get<string>('language', 'auto') as ExtensionConfig['language'],
-      style: config.get<string>('style', 'gitmoji-conventional') as ExtensionConfig['style'],
+      style: config.get<string>('style', 'conventional') as CommitStyle,
+      useGitmojis: config.get<boolean>('useGitmojis', true),
       includeBody: config.get<boolean>('includeBody', true),
       bodyThreshold: config.get<number>('bodyThreshold', 5),
       recentCommitsCount: config.get<number>('recentCommitsCount', 10),

@@ -48,6 +48,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
               diff: diff.content,
               language,
               style: config.style,
+              useGitmojis: config.useGitmojis,
               recentCommits,
               includeBody: config.includeBody && diff.stats.filesChanged >= config.bodyThreshold,
               stats: diff.stats,

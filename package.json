@@ -1,0 +1,174 @@
+{
+  "name": "vscode-git-commit-generator",
+  "displayName": "Git Commit Message Generator",
+  "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
+  "version": "0.0.1",
+  "publisher": "your-publisher-id",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "commit",
+    "message",
+    "conventional-commits",
+    "gitmoji",
+    "ai",
+    "copilot"
+  ],
+  "activationEvents": [
+    "onCommand:git-commit-generator.generate"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "git-commit-generator.generate",
+        "title": "Generate Commit Message",
+        "category": "Git Commit",
+        "icon": "$(git-commit)",
+        "enablement": "gitOpenRepositoryCount > 0"
+      },
+      {
+        "command": "git-commit-generator.selectModel",
+        "title": "Select Language Model",
+        "category": "Git Commit"
+      },
+      {
+        "command": "git-commit-generator.openSettings",
+        "title": "Open Settings",
+        "category": "Git Commit"
+      },
+      {
+        "command": "git-commit-generator.refreshModels",
+        "title": "Refresh Available Models",
+        "category": "Git Commit"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "git-commit-generator.generate",
+          "group": "navigation",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "git-commit-generator.selectModel",
+          "group": "2_configure",
+          "when": "scmProvider == git"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "git-commit-generator.generate",
+          "when": "gitOpenRepositoryCount > 0"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Git Commit Generator",
+      "properties": {
+        "gitCommitGenerator.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "es"
+          ],
+          "enumDescriptions": [
+            "Auto-detect from VS Code locale",
+            "English",
+            "Español (Spanish)"
+          ],
+          "description": "Commit message language. 'auto' detects from VS Code locale."
+        },
+        "gitCommitGenerator.style": {
+          "type": "string",
+          "default": "gitmoji-conventional",
+          "enum": [
+            "gitmoji-conventional",
+            "conventional-only"
+          ],
+          "enumDescriptions": [
+            "Gitmoji + Conventional Commits (e.g., ✨ feat: add feature)",
+            "Conventional Commits only (e.g., feat: add feature)"
+          ],
+          "description": "Commit message style format"
+        },
+        "gitCommitGenerator.includeBody": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generate detailed description body for complex changes"
+        },
+        "gitCommitGenerator.bodyThreshold": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Minimum number of changed files to include body generation"
+        },
+        "gitCommitGenerator.recentCommitsCount": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 50,
+          "description": "Number of recent commits to include for context"
+        },
+        "gitCommitGenerator.modelFamily": {
+          "type": "string",
+          "default": "gpt-4o",
+          "enum": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "claude-3.5-sonnet"
+          ],
+          "enumDescriptions": [
+            "GPT-4o - Best quality, recommended",
+            "GPT-4o Mini - Faster, good for most cases",
+            "Claude 3.5 Sonnet - Alternative model"
+          ],
+          "description": "Language model family to use for commit generation"
+        },
+        "gitCommitGenerator.useCopilot": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use GitHub Copilot's language models. If false, you need to configure API keys separately."
+        },
+        "gitCommitGenerator.modelId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Selected model ID (set automatically when you select a model)"
+        },
+        "gitCommitGenerator.modelVendor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Selected model vendor (set automatically when you select a model)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@types/node": "20.x",
+    "typescript": "^5.3.0"
+  }
+}

@@ -14,7 +14,6 @@ export class ConfigManager {
       bodyThreshold: config.get<number>('bodyThreshold', 5),
       recentCommitsCount: config.get<number>('recentCommitsCount', 10),
       modelFamily: config.get<string>('modelFamily', 'gpt-4o') as ExtensionConfig['modelFamily'],
-      useCopilot: config.get<boolean>('useCopilot', true),
     };
   }
 

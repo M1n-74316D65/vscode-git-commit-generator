@@ -9,6 +9,16 @@ const execAsync = promisify(exec);
 const GIT_COMMAND_TIMEOUT_MS = 30000;
 const MAX_DIFF_SIZE_BYTES = 1024 * 1024; // 1MB
 
+interface GitApiRepository {
+  rootUri: vscode.Uri;
+  inputBox?: { value: string };
+}
+
+interface GitApi {
+  repositories: GitApiRepository[];
+  getRepository?: (uri: vscode.Uri) => GitApiRepository | null | undefined;
+}
+
 export class GitManager {
   private cwd: string;
 
@@ -20,6 +30,16 @@ export class GitManager {
    * Find the git repository root in the current workspace
    */
   static async findGitRepository(): Promise<string | undefined> {
+    const git = await this.getGitApi();
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+
+    if (git) {
+      const repo = this.resolveRepository(git, activeUri);
+      if (repo) {
+        return repo.rootUri.fsPath;
+      }
+    }
+
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
       return undefined;
@@ -52,6 +72,65 @@ export class GitManager {
     } catch {
       return false;
     }
+  }
+
+  static async hasGitRepository(): Promise<boolean> {
+    if (await this.findGitRepository()) {
+      return true;
+    }
+
+    const git = await this.getGitApi();
+    return Boolean(git?.repositories.length);
+  }
+
+  private static async getGitApi(): Promise<GitApi | undefined> {
+    try {
+      const gitExtension = vscode.extensions.getExtension('vscode.git');
+      if (!gitExtension) {
+        return undefined;
+      }
+
+      if (!gitExtension.isActive) {
+        await gitExtension.activate();
+      }
+
+      return gitExtension.exports.getAPI(1) as GitApi;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private static resolveRepository(
+    git: GitApi,
+    preferredUri?: vscode.Uri
+  ): GitApiRepository | undefined {
+    if (preferredUri && git.getRepository) {
+      const directMatch = git.getRepository(preferredUri);
+      if (directMatch) {
+        return directMatch;
+      }
+    }
+
+    const exactMatch = git.repositories.find(
+      (repository) => repository.rootUri.fsPath === preferredUri?.fsPath
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const containingRepositories = git.repositories.filter((repository) => {
+      const root = repository.rootUri.fsPath;
+      const path = preferredUri?.fsPath;
+      return Boolean(path && (path === root || path.startsWith(`${root}/`)));
+    });
+
+    if (containingRepositories.length > 0) {
+      return containingRepositories.sort(
+        (left, right) => right.rootUri.fsPath.length - left.rootUri.fsPath.length
+      )[0];
+    }
+
+    return git.repositories[0];
   }
 
   /**
@@ -150,19 +229,7 @@ export class GitManager {
    */
   async setCommitMessage(message: string): Promise<boolean> {
     try {
-      // Access the built-in Git extension API
-      const gitExtension = vscode.extensions.getExtension('vscode.git');
-      if (!gitExtension) {
-        console.error('Git extension not found');
-        return false;
-      }
-
-      // Activate the extension if needed
-      if (!gitExtension.isActive) {
-        await gitExtension.activate();
-      }
-
-      const git = gitExtension.exports.getAPI(1);
+      const git = await GitManager.getGitApi();
       if (!git) {
         console.error('Could not get Git API');
         return false;
@@ -175,12 +242,8 @@ export class GitManager {
       }
 
       // Find the repository matching our cwd
-      const repo =
-        repositories.find(
-          (r: any) =>
-            this.cwd.startsWith(r.rootUri.fsPath) ||
-            r.rootUri.fsPath === this.cwd
-        ) || repositories[0];
+      const preferredUri = vscode.window.activeTextEditor?.document.uri ?? vscode.Uri.file(this.cwd);
+      const repo = GitManager.resolveRepository(git, preferredUri);
 
       if (!repo || !repo.inputBox) {
         console.error('Repository or inputBox not available');

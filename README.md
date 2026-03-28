@@ -1,6 +1,6 @@
 # Git Commit Message Generator
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-git-commit-generator)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue.svg)](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-llm-api-git-commit-generator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-green.svg)](https://github.com/M1n-74316D65/vscode-git-commit-generator)
 
@@ -135,7 +135,7 @@ Open VS Code settings (Ctrl+, / Cmd+,) and search for "Git Commit Generator":
 
 ```bash
 # Clone repository
-git clone https://github.com/your-username/vscode-git-commit-generator.git
+git clone https://github.com/M1n-74316D65/vscode-git-commit-generator.git
 cd vscode-git-commit-generator
 
 # Install dependencies
@@ -170,8 +170,8 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 ## 📮 Support
 
-- [GitHub Issues](https://github.com/your-username/vscode-git-commit-generator/issues)
-- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-git-commit-generator)
+- [GitHub Issues](https://github.com/M1n-74316D65/vscode-git-commit-generator/issues)
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=m1n.vscode-llm-api-git-commit-generator)
 
 ---
 

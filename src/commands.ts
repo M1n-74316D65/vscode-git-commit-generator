@@ -45,7 +45,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             const language = ConfigManager.getLanguage();
 
             // Get recent commits for context (parallel with other operations)
-            progress.report({ increment: 15, message: 'Analyzing commit history...' });
+            progress.report({ increment: 15, message: translation.messages.analyzingHistory });
             const [recentCommits] = await Promise.all([
               gitManager.getRecentCommits(config.recentCommitsCount),
             ]);
@@ -66,8 +66,11 @@ export function registerCommands(context: vscode.ExtensionContext): void {
             };
 
             // Generate commit message with progress reporting
-            const result = await LLMManager.generateCommitMessage(generationContext, progress);
-
+            const result = await LLMManager.generateCommitMessage(
+              generationContext,
+              progress,
+              token
+            );
             if (token.isCancellationRequested) {
               return undefined;
             }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConfigManager } from './config';
+import { GitManager } from './git';
 
 export class StatusBarManager {
   private static statusBarItem: vscode.StatusBarItem | undefined;
@@ -34,7 +35,11 @@ export class StatusBarManager {
       this.updateVisibility();
     });
 
-    context.subscriptions.push(gitWatcher);
+    const activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor(() => {
+      this.updateVisibility();
+    });
+
+    context.subscriptions.push(gitWatcher, activeEditorWatcher);
 
     // Initial visibility check
     this.updateVisibility();
@@ -50,9 +55,14 @@ export class StatusBarManager {
 
     const styleName = translation.styles[config.style];
     const gitmojiIcon = config.useGitmojis ? '✨' : '⭕';
+    const gitmojiStatus = config.useGitmojis
+      ? translation.messages.enabledLabel
+      : translation.messages.disabledLabel;
 
     this.statusBarItem.text = `$(git-commit) ${styleName} ${gitmojiIcon}`;
-    this.statusBarItem.tooltip = `Click to change commit style\nCurrent: ${styleName}\nGitmojis: ${config.useGitmojis ? 'ON' : 'OFF'}`;
+    this.statusBarItem.tooltip = translation.messages.statusBarTooltip
+      .replace('{0}', styleName)
+      .replace('{1}', gitmojiStatus);
   }
 
   static updateVisibility(): void {
@@ -60,16 +70,17 @@ export class StatusBarManager {
       return;
     }
 
-    // Only show if there's a git repository
-    const hasGitRepo = vscode.workspace.workspaceFolders?.some(
-      folder => folder.uri.scheme === 'file'
-    ) ?? false;
+    void GitManager.hasGitRepository().then((hasGitRepo) => {
+      if (!this.statusBarItem) {
+        return;
+      }
 
-    if (hasGitRepo) {
-      this.statusBarItem.show();
-    } else {
-      this.statusBarItem.hide();
-    }
+      if (hasGitRepo) {
+        this.statusBarItem.show();
+      } else {
+        this.statusBarItem.hide();
+      }
+    });
   }
 
   static dispose(): void {

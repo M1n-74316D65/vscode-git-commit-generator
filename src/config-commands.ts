@@ -3,6 +3,8 @@ import { ConfigManager } from './config';
 import { LLMManager } from './llm';
 import { CommitStyle } from './types';
 
+const EXTENSION_SETTINGS_QUERY = '@ext:m1n.vscode-llm-api-git-commit-generator';
+
 // Style definitions with categories for QuickPick
 interface StyleDefinition {
   id: CommitStyle;
@@ -56,12 +58,13 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
   const selectModelDisposable = vscode.commands.registerCommand(
     'git-commit-generator.selectModel',
     async () => {
+      const translation = ConfigManager.getTranslation();
       const config = vscode.workspace.getConfiguration('gitCommitGenerator');
       
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Fetching available models from VS Code LLM API...',
+          title: translation.messages.fetchingModels,
           cancellable: false
         },
         async (progress) => {
@@ -71,21 +74,26 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             
             if (allModels.length === 0) {
               const result = await vscode.window.showWarningMessage(
-                'No language models available. Make sure GitHub Copilot is installed and enabled.',
-                'Install Copilot',
-                'Open Settings'
+                translation.messages.noModelsWithCopilot,
+                translation.messages.installCopilot,
+                translation.messages.openSettings
               );
               
-              if (result === 'Install Copilot') {
+              if (result === translation.messages.installCopilot) {
                 await vscode.commands.executeCommand(
                   'vscode.open',
                   vscode.Uri.parse('vscode:extension/GitHub.copilot')
+                );
+              } else if (result === translation.messages.openSettings) {
+                await vscode.commands.executeCommand(
+                  'workbench.action.openSettings',
+                  EXTENSION_SETTINGS_QUERY
                 );
               }
               return;
             }
 
-            progress.report({ increment: 50, message: 'Building model list...' });
+            progress.report({ increment: 50, message: translation.messages.buildingModelList });
 
             // Map models to QuickPick items
             const modelItems = allModels.map(model => ({
@@ -96,11 +104,11 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
               picked: model.family === config.get('modelFamily', 'gpt-4o')
             }));
 
-            progress.report({ increment: 50, message: 'Showing selection...' });
+            progress.report({ increment: 50, message: translation.messages.showingModelSelection });
 
             const selected = await vscode.window.showQuickPick(modelItems, {
-              placeHolder: 'Select a language model for commit generation',
-              title: `Git Commit Generator - ${allModels.length} Model(s) Available`,
+              placeHolder: translation.messages.selectLanguageModel,
+              title: translation.messages.modelsAvailableTitle.replace('{0}', String(allModels.length)),
               ignoreFocusOut: true,
               matchOnDescription: true,
               matchOnDetail: true
@@ -109,16 +117,20 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             if (selected) {
               await config.update('modelFamily', selected.model.family, true);
               await config.update('modelId', selected.model.id, true);
-              await config.update('modelVendor', selected.model.vendor, true);
               
               vscode.window.showInformationMessage(
-                `✅ Model set to ${selected.model.name} (${selected.model.family})`
+                translation.messages.modelSet
+                  .replace('{0}', selected.model.name)
+                  .replace('{1}', selected.model.family)
               );
             }
           } catch (error) {
             console.error('Error fetching models:', error);
             vscode.window.showErrorMessage(
-              `Error fetching models: ${error instanceof Error ? error.message : String(error)}`
+              translation.messages.errorFetchingModels.replace(
+                '{0}',
+                error instanceof Error ? error.message : String(error)
+              )
             );
           }
         }
@@ -132,7 +144,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
     async () => {
       await vscode.commands.executeCommand(
         'workbench.action.openSettings',
-        '@ext:m1n.vscode-git-commit-generator'
+        EXTENSION_SETTINGS_QUERY
       );
     }
   );
@@ -141,6 +153,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
   const refreshModelsDisposable = vscode.commands.registerCommand(
     'git-commit-generator.refreshModels',
     async () => {
+      const translation = ConfigManager.getTranslation();
       // Clear the cache first to force fresh model fetch
       LLMManager.clearModelCache();
       
@@ -148,7 +161,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Refreshing available language models...',
+          title: translation.messages.refreshingModels,
           cancellable: false
         },
         async () => {
@@ -158,17 +171,17 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             
             if (models.length === 0) {
               const result = await vscode.window.showWarningMessage(
-                'No language models available. Make sure GitHub Copilot is installed and enabled.',
-                'Install Copilot',
-                'Open Settings'
+                translation.messages.noModelsWithCopilot,
+                translation.messages.installCopilot,
+                translation.messages.openSettings
               );
               
-              if (result === 'Install Copilot') {
+              if (result === translation.messages.installCopilot) {
                 await vscode.commands.executeCommand(
                   'vscode.open',
                   vscode.Uri.parse('vscode:extension/GitHub.copilot')
                 );
-              } else if (result === 'Open Settings') {
+              } else if (result === translation.messages.openSettings) {
                 await vscode.commands.executeCommand(
                   'workbench.action.openSettings',
                   '@ext:GitHub.copilot'
@@ -182,11 +195,14 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             
             // Success - now open the model selector
             vscode.window.showInformationMessage(
-              `✅ Found ${models.length} available model(s). Opening selector...`
+              translation.messages.modelsFoundOpeningSelector.replace('{0}', String(models.length))
             );
           } catch (error) {
             vscode.window.showErrorMessage(
-              `Error refreshing models: ${error instanceof Error ? error.message : String(error)}`
+              translation.messages.errorRefreshingModels.replace(
+                '{0}',
+                error instanceof Error ? error.message : String(error)
+              )
             );
             return;
           }
@@ -239,7 +255,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
       
       const selected = await vscode.window.showQuickPick(quickPickItems, {
         placeHolder: translation.messages.selectStyle,
-        title: `${translation.categories.popular.split(' ')[0]} - 15 Styles`,
+        title: translation.messages.selectStyleTitle,
         ignoreFocusOut: true,
         matchOnDescription: true
       });

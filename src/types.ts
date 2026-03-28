@@ -49,5 +49,4 @@ export interface ExtensionConfig {
   bodyThreshold: number;
   recentCommitsCount: number;
   modelFamily: 'gpt-4o' | 'gpt-4o-mini' | 'claude-3.5-sonnet';
-  useCopilot: boolean;
 }

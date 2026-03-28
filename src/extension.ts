@@ -3,18 +3,23 @@ import { registerCommands } from './commands';
 import { registerConfigCommands } from './config-commands';
 import { StatusBarManager } from './status-bar';
 import { GitManager } from './git';
+import { ConfigManager } from './config';
+
+const EXTENSION_SETTINGS_QUERY = '@ext:m1n.vscode-llm-api-git-commit-generator';
 
 export async function activate(context: vscode.ExtensionContext) {
+  const translation = ConfigManager.getTranslation();
+
   try {
     // Check if Git is available
     const isGitAvailable = await GitManager.isGitAvailable();
     if (!isGitAvailable) {
       vscode.window.showWarningMessage(
-        'Git Commit Generator: Git is not available in your system PATH. Some features may not work.',
-        'Open Settings'
+        translation.messages.gitUnavailable,
+        translation.messages.openSettings
       ).then(selection => {
-        if (selection === 'Open Settings') {
-          vscode.commands.executeCommand('workbench.action.openSettings', '@ext:m1n.vscode-git-commit-generator');
+        if (selection === translation.messages.openSettings) {
+          vscode.commands.executeCommand('workbench.action.openSettings', EXTENSION_SETTINGS_QUERY);
         }
       });
     }
@@ -33,37 +38,29 @@ export async function activate(context: vscode.ExtensionContext) {
     const hasShownWelcome = config.get<boolean>('hasShownWelcome', false);
     
     if (!hasShownWelcome) {
-      const result = await vscode.window.showInformationMessage(
-        'Git Commit Generator is ready! Generate commit messages with AI using the sparkle button in the Source Control panel.',
-        'Open Settings',
-        'Generate a Commit',
-        'Got it'
-      );
-      
-      if (result === 'Open Settings') {
-        await vscode.commands.executeCommand(
-          'workbench.action.openSettings',
-          '@ext:m1n.vscode-git-commit-generator'
-        );
-      } else if (result === 'Generate a Commit') {
-        await vscode.commands.executeCommand('git-commit-generator.generate');
-      }
-      
-      await config.update('hasShownWelcome', true, true);
-    }
+      void vscode.window.showInformationMessage(
+        translation.messages.welcomeReady,
+        translation.messages.openSettings,
+        translation.messages.generateCommitAction,
+        translation.messages.gotIt
+      ).then(async (result) => {
+        if (result === translation.messages.openSettings) {
+          await vscode.commands.executeCommand(
+            'workbench.action.openSettings',
+            EXTENSION_SETTINGS_QUERY
+          );
+        } else if (result === translation.messages.generateCommitAction) {
+          await vscode.commands.executeCommand('git-commit-generator.generate');
+        }
 
-    // Set up configuration change listener for status bar
-    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('gitCommitGenerator')) {
-        StatusBarManager.update();
-      }
-    });
-    context.subscriptions.push(configChangeDisposable);
+        await config.update('hasShownWelcome', true, true);
+      });
+    }
 
   } catch (error) {
     console.error('❌ Error registering commands:', error);
     vscode.window.showErrorMessage(
-      'Git Commit Generator failed to activate. Check the Debug Console for details.'
+      translation.messages.activationFailed
     );
   }
 }

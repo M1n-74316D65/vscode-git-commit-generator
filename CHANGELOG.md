@@ -5,7 +5,19 @@ All notable changes to the Git Commit Message Generator extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2024-XX-XX
+## [1.0.1] - 2026-03-28
+
+### Changed
+- Tighten production packaging and versioned VSIX output for marketplace publishing
+- Improve cancellation flow, Git repo targeting, and localized extension messaging
+
+### Added
+- Extension-host smoke tests for command registration and translation loading
+
+### Removed
+- Outdated production checklist document and unused model selector module
+
+## [1.0.0] - 2026-03-28
 
 ### Added
 - Initial release with 15 commit styles
@@ -18,11 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git availability checking
 - Status bar showing current style and gitmoji status
 - 4 grouped SCM buttons for easy access
+- Localized model selection, activation, and status bar messaging
+- Working VS Code extension-host smoke tests
+- Improved multi-repository targeting for SCM commit input
 
 ### Features
 - **15 Commit Styles**: Conventional Commits, Angular, Atom, ESLint, jQuery, Ember.js, Linux Kernel, Symfony, Rails, GraphQL, Docker, Karma, Semantic Versioning, Plain, Bitbucket
 - **Gitmoji Toggle**: Independent control of emoji prefixes
-- **Smart Body Generation**: Auto-generates detailed descriptions for complex changes (5+ files)
+- **Smart Body Generation**: Auto-generates detailed descriptions based on configurable file thresholds
 - **Context Awareness**: Uses recent commit history for consistency
 - **Language Model Selection**: Pick from available VS Code LLM models
 - **Model Caching**: 5-minute cache to optimize performance

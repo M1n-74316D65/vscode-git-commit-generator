@@ -217,11 +217,24 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
   }
 
   private static cleanSubject(subject: string): string {
-    // Remove quotes if present
-    return subject
+    // Remove quotes if present and trim
+    let cleaned = subject
       .replace(/^["']|["']$/g, '')
-      .replace(/^\s+|\s+$/g, '')
-      .substring(0, 72); // Ensure max length
+      .replace(/^\s+|\s+$/g, '');
+    
+    // Truncate at word boundary if over 72 chars
+    if (cleaned.length > 72) {
+      const truncated = cleaned.substring(0, 72);
+      // Find last space to avoid cutting mid-word
+      const lastSpace = truncated.lastIndexOf(' ');
+      if (lastSpace > 50) {
+        cleaned = truncated.substring(0, lastSpace) + '...';
+      } else {
+        cleaned = truncated + '...';
+      }
+    }
+    
+    return cleaned;
   }
 
   private static handleLMError(error: vscode.LanguageModelError): Error {

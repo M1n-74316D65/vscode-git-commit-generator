@@ -8,6 +8,21 @@ const execAsync = promisify(exec);
 // Constants
 const GIT_COMMAND_TIMEOUT_MS = 30000;
 const MAX_DIFF_SIZE_BYTES = 1024 * 1024; // 1MB
+const EXEC_MAX_BUFFER = 8 * 1024 * 1024; // 8MB, comfortably above MAX_DIFF_SIZE_BYTES
+const DEFAULT_RECENT_COMMITS_COUNT = 10;
+const MAX_RECENT_COMMITS_COUNT = 50;
+
+/**
+ * Coerce the recentCommitsCount setting into a safe integer for shell interpolation.
+ * Falls back to the default on NaN/garbage, clamps to 0..MAX.
+ */
+export function sanitizeRecentCommitsCount(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_RECENT_COMMITS_COUNT;
+  }
+  return Math.min(Math.max(Math.round(parsed), 0), MAX_RECENT_COMMITS_COUNT);
+}
 
 interface GitApiRepository {
   rootUri: vscode.Uri;
@@ -45,15 +60,25 @@ export class GitManager {
       return undefined;
     }
 
+    // Prefer the workspace folder containing the active editor, then the rest
+    const orderedFolders = [...workspaceFolders].sort((a, b) => {
+      const activePath = activeUri?.fsPath;
+      const score = (folder: vscode.WorkspaceFolder) =>
+        activePath && (activePath === folder.uri.fsPath || activePath.startsWith(`${folder.uri.fsPath}/`)) ? 0 : 1;
+      return score(a) - score(b);
+    });
+
     // Try to find git root in parallel for all workspace folders
-    const promises = workspaceFolders.map(async (folder) => {
+    const promises = orderedFolders.map(async (folder) => {
       try {
         const { stdout } = await execAsync('git rev-parse --show-toplevel', {
           cwd: folder.uri.fsPath,
           timeout: GIT_COMMAND_TIMEOUT_MS,
+          maxBuffer: EXEC_MAX_BUFFER,
         });
         return stdout.trim();
-      } catch {
+      } catch (error) {
+        console.error(`Failed to resolve git root for ${folder.uri.fsPath}:`, error);
         return undefined;
       }
     });
@@ -67,7 +92,7 @@ export class GitManager {
    */
   static async isGitAvailable(): Promise<boolean> {
     try {
-      await execAsync('git --version', { timeout: 5000 });
+      await execAsync('git --version', { timeout: 5000, maxBuffer: EXEC_MAX_BUFFER });
       return true;
     } catch {
       return false;
@@ -95,7 +120,8 @@ export class GitManager {
       }
 
       return gitExtension.exports.getAPI(1) as GitApi;
-    } catch {
+    } catch (error) {
+      console.error('Failed to get Git extension API:', error);
       return undefined;
     }
   }
@@ -134,65 +160,55 @@ export class GitManager {
   }
 
   /**
-   * Get staged changes diff
+   * Get staged changes diff.
+   * Returns undefined when there are genuinely no staged changes;
+   * throws when a git command fails so the caller can report the real error.
    */
   async getStagedDiff(): Promise<GitDiff | undefined> {
-    try {
-      // First check if there are staged changes
-      const { stdout: statusOutput } = await execAsync(
-        'git diff --staged --name-only',
-        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS }
-      );
-
-      if (!statusOutput.trim()) {
-        return undefined;
-      }
-
-      // Get staged diff with size limit
-      const { stdout: diffOutput } = await execAsync('git diff --staged', {
+    // Get the full diff and stats concurrently
+    const [{ stdout: diffOutput }, { stdout: statOutput }] = await Promise.all([
+      execAsync('git diff --staged', {
         cwd: this.cwd,
         timeout: GIT_COMMAND_TIMEOUT_MS,
-      });
+        maxBuffer: EXEC_MAX_BUFFER,
+      }),
+      execAsync('git diff --staged --stat', {
+        cwd: this.cwd,
+        timeout: GIT_COMMAND_TIMEOUT_MS,
+        maxBuffer: EXEC_MAX_BUFFER,
+      }),
+    ]);
 
-      if (!diffOutput.trim()) {
-        return undefined;
-      }
-
-      // Check diff size
-      if (Buffer.byteLength(diffOutput, 'utf8') > MAX_DIFF_SIZE_BYTES) {
-        console.warn('Diff is very large, may be truncated by LLM');
-      }
-
-      // Get stats in parallel
-      const { stdout: statOutput } = await execAsync(
-        'git diff --staged --stat',
-        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS }
-      );
-
-      const stats = this.parseStats(statOutput);
-
-      return {
-        content: diffOutput,
-        stats,
-      };
-    } catch (error) {
-      console.error('Error getting staged diff:', error);
+    if (!diffOutput.trim()) {
       return undefined;
     }
+
+    // Check diff size
+    if (Buffer.byteLength(diffOutput, 'utf8') > MAX_DIFF_SIZE_BYTES) {
+      console.warn(`Staged diff exceeds ${MAX_DIFF_SIZE_BYTES} bytes, will be truncated before sending to the LLM`);
+    }
+
+    const stats = GitManager.parseStats(statOutput);
+
+    return {
+      content: diffOutput,
+      stats,
+    };
   }
 
   /**
    * Get recent commits for context
    */
   async getRecentCommits(count: number): Promise<string[]> {
-    if (count === 0) {
+    const safeCount = sanitizeRecentCommitsCount(count);
+    if (safeCount === 0) {
       return [];
     }
 
     try {
       const { stdout } = await execAsync(
-        `git log --oneline -${count}`,
-        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS }
+        `git log --oneline -n ${safeCount}`,
+        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER }
       );
 
       return stdout
@@ -208,7 +224,7 @@ export class GitManager {
   /**
    * Parse git diff stats
    */
-  private parseStats(statOutput: string): GitDiffStats {
+  static parseStats(statOutput: string): GitDiffStats {
     const lines = statOutput.trim().split('\n');
     const lastLine = lines[lines.length - 1];
 
@@ -241,9 +257,18 @@ export class GitManager {
         return false;
       }
 
-      // Find the repository matching our cwd
-      const preferredUri = vscode.window.activeTextEditor?.document.uri ?? vscode.Uri.file(this.cwd);
-      const repo = GitManager.resolveRepository(git, preferredUri);
+      // Resolve the repository matching the diffed cwd first,
+      // falling back to the active editor's repository
+      const cwdUri = vscode.Uri.file(this.cwd);
+      let repo = GitManager.resolveRepository(git, cwdUri);
+
+      if (!repo && vscode.window.activeTextEditor) {
+        repo = GitManager.resolveRepository(git, vscode.window.activeTextEditor.document.uri);
+      }
+
+      if (!repo) {
+        repo = git.repositories[0];
+      }
 
       if (!repo || !repo.inputBox) {
         console.error('Repository or inputBox not available');
@@ -255,42 +280,6 @@ export class GitManager {
     } catch (error) {
       console.error('Error setting commit message:', error);
       return false;
-    }
-  }
-
-  /**
-   * Get repository status
-   */
-  async getStatus(): Promise<{ staged: number; modified: number; untracked: number }> {
-    try {
-      const { stdout } = await execAsync(
-        'git status --porcelain',
-        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS }
-      );
-
-      const lines = stdout.trim().split('\n').filter((line) => line.length > 0);
-
-      let staged = 0;
-      let modified = 0;
-      let untracked = 0;
-
-      for (const line of lines) {
-        const status = line.substring(0, 2);
-        if (status[0] !== ' ' && status[0] !== '?') {
-          staged++;
-        }
-        if (status[1] === 'M' || status[1] === 'D') {
-          modified++;
-        }
-        if (status === '??') {
-          untracked++;
-        }
-      }
-
-      return { staged, modified, untracked };
-    } catch (error) {
-      console.error('Error getting git status:', error);
-      return { staged: 0, modified: 0, untracked: 0 };
     }
   }
 }

@@ -50,7 +50,6 @@ Para generación de cuerpo (cuando hay muchos cambios):
     currentStyle: 'Actual: {0}',
     selectStyle: 'Seleccionar estilo de mensaje de commit',
     selectStyleTitle: 'Seleccionar estilo de commit',
-    toggleGitmojis: 'Activar/Desactivar Gitmijos',
     analyzingModel: 'Analizando modelos disponibles...',
     analyzingHistory: 'Analizando historial de commits...',
     fetchingModels: 'Obteniendo modelos disponibles desde la API LLM de VS Code...',
@@ -74,16 +73,6 @@ Para generación de cuerpo (cuando hay muchos cambios):
     statusBarTooltip: 'Haz clic para cambiar el estilo de commit\nActual: {0}\nGitmojis: {1}',
   },
 
-  commitTypes: {
-    feat: 'feat',
-    fix: 'fix',
-    perf: 'perf',
-    docs: 'docs',
-    refactor: 'refactor',
-    test: 'test',
-    chore: 'chore',
-  },
-
   styles: {
     conventional: 'Conventional Commits',
     angular: 'Angular/Google',
@@ -100,24 +89,6 @@ Para generación de cuerpo (cuando hay muchos cambios):
     semantic: 'Semantic Versioning',
     plain: 'Plain Simple',
     bitbucket: 'Bitbucket',
-  },
-
-  styleDescriptions: {
-    conventional: 'tipo: descripción',
-    angular: 'tipo(alcance): descripción',
-    atom: ':emoji: descripción',
-    eslint: 'Tag: Descripción',
-    jquery: 'Componente: Descripción breve',
-    ember: '[TAG] descripción breve',
-    linux: 'subsistema: descripción',
-    symfony: '[Tipo] Descripción',
-    rails: '[Tag] descripción',
-    graphql: 'descripción (tipo)',
-    docker: 'alcance: descripción',
-    karma: 'tipo(alcance): descripción',
-    semantic: 'tipo: descripción (cierra #X)',
-    plain: 'Descripción',
-    bitbucket: 'JIRA-123: descripción',
   },
 
   categories: {

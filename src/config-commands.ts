@@ -116,7 +116,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
 
             if (selected) {
               await config.update('modelFamily', selected.model.family, true);
-              await config.update('modelId', selected.model.id, true);
+              await ConfigManager.setModelId(selected.model.id);
               
               vscode.window.showInformationMessage(
                 translation.messages.modelSet
@@ -154,10 +154,10 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
     'git-commit-generator.refreshModels',
     async () => {
       const translation = ConfigManager.getTranslation();
-      // Clear the cache first to force fresh model fetch
+      // Clear the cache once to force a fresh model fetch
       LLMManager.clearModelCache();
-      
-      // First refresh models, then automatically open the selector
+
+      let refreshed = false;
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -166,16 +166,15 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
         },
         async () => {
           try {
-            // Refresh the models (this caches them in VS Code)
             const models = await vscode.lm.selectChatModels({});
-            
+
             if (models.length === 0) {
               const result = await vscode.window.showWarningMessage(
                 translation.messages.noModelsWithCopilot,
                 translation.messages.installCopilot,
                 translation.messages.openSettings
               );
-              
+
               if (result === translation.messages.installCopilot) {
                 await vscode.commands.executeCommand(
                   'vscode.open',
@@ -189,28 +188,30 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
               }
               return;
             }
-            
-            // Cache the models
-            LLMManager.clearModelCache(); // Clear first
-            
-            // Success - now open the model selector
+
+            // Populate the cache with the freshly fetched models
+            LLMManager.cacheModels(models);
+            refreshed = true;
+
             vscode.window.showInformationMessage(
               translation.messages.modelsFoundOpeningSelector.replace('{0}', String(models.length))
             );
           } catch (error) {
+            console.error('Error refreshing models:', error);
             vscode.window.showErrorMessage(
               translation.messages.errorRefreshingModels.replace(
                 '{0}',
                 error instanceof Error ? error.message : String(error)
               )
             );
-            return;
           }
         }
       );
-      
-      // Open the model selector after refresh completes
-      await vscode.commands.executeCommand('git-commit-generator.selectModel');
+
+      // Open the model selector after a successful refresh
+      if (refreshed) {
+        await vscode.commands.executeCommand('git-commit-generator.selectModel');
+      }
     }
   );
 

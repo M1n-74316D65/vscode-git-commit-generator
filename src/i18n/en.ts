@@ -50,7 +50,6 @@ For body generation (when there are many changes):
     currentStyle: 'Current: {0}',
     selectStyle: 'Select commit message style',
     selectStyleTitle: 'Select Commit Style',
-    toggleGitmojis: 'Toggle Gitmojis On/Off',
     analyzingModel: 'Analyzing available models...',
     analyzingHistory: 'Analyzing commit history...',
     fetchingModels: 'Fetching available models from VS Code LLM API...',
@@ -74,16 +73,6 @@ For body generation (when there are many changes):
     statusBarTooltip: 'Click to change commit style\nCurrent: {0}\nGitmojis: {1}',
   },
 
-  commitTypes: {
-    feat: 'feat',
-    fix: 'fix',
-    perf: 'perf',
-    docs: 'docs',
-    refactor: 'refactor',
-    test: 'test',
-    chore: 'chore',
-  },
-
   styles: {
     conventional: 'Conventional Commits',
     angular: 'Angular/Google',
@@ -100,24 +89,6 @@ For body generation (when there are many changes):
     semantic: 'Semantic Versioning',
     plain: 'Plain Simple',
     bitbucket: 'Bitbucket',
-  },
-
-  styleDescriptions: {
-    conventional: 'type: description',
-    angular: 'type(scope): description',
-    atom: ':emoji: description',
-    eslint: 'Tag: Description',
-    jquery: 'Component: Short description',
-    ember: '[TAG] short description',
-    linux: 'subsystem: description',
-    symfony: '[Type] Description',
-    rails: '[Tag] description',
-    graphql: 'description (type)',
-    docker: 'scope: description',
-    karma: 'type(scope): description',
-    semantic: 'type: description (closes #X)',
-    plain: 'Description',
-    bitbucket: 'JIRA-123: description',
   },
 
   categories: {

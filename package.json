@@ -30,11 +30,6 @@
     "ai",
     "copilot"
   ],
-  "activationEvents": [
-    "onCommand:git-commit-generator.generate",
-    "onCommand:git-commit-generator.selectStyle",
-    "onCommand:git-commit-generator.toggleGitmojis"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -199,30 +194,7 @@
         "gitCommitGenerator.modelFamily": {
           "type": "string",
           "default": "gpt-4o",
-          "enum": [
-            "gpt-4o",
-            "gpt-4o-mini",
-            "claude-3.5-sonnet"
-          ],
-          "enumDescriptions": [
-            "GPT-4o - Best quality, recommended",
-            "GPT-4o Mini - Faster, good for most cases",
-            "Claude 3.5 Sonnet - Alternative model"
-          ],
-          "description": "Language model family to use for commit generation"
-        },
-        "gitCommitGenerator.modelId": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null,
-          "description": "Selected model ID (set automatically when you select a model)"
-        },
-        "gitCommitGenerator.hasShownWelcome": {
-          "type": "boolean",
-          "default": false,
-          "description": "Whether the welcome message has been shown (internal)"
+          "description": "Language model family to use for commit generation (e.g. gpt-4o, gpt-4o-mini, claude-3.5-sonnet). Set automatically when you select a model."
         }
       }
     }

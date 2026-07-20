@@ -20,13 +20,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
         const gitManager = new GitManager(gitRoot);
 
-        // Check for staged changes
-        const diff = await gitManager.getStagedDiff();
-        if (!diff) {
-          vscode.window.showWarningMessage(translation.messages.noStagedChanges);
-          return;
-        }
-
         // Show progress notification with detailed steps
         const commitMessage = await vscode.window.withProgress(
           {
@@ -40,15 +33,24 @@ export function registerCommands(context: vscode.ExtensionContext): void {
               return undefined;
             }
 
+            // Check for staged changes (inside progress so large diffs show feedback)
+            const diff = await gitManager.getStagedDiff();
+            if (!diff) {
+              vscode.window.showWarningMessage(translation.messages.noStagedChanges);
+              return undefined;
+            }
+
+            if (token.isCancellationRequested) {
+              return undefined;
+            }
+
             // Get configuration
             const config = ConfigManager.getConfig();
             const language = ConfigManager.getLanguage();
 
-            // Get recent commits for context (parallel with other operations)
+            // Get recent commits for context
             progress.report({ increment: 15, message: translation.messages.analyzingHistory });
-            const [recentCommits] = await Promise.all([
-              gitManager.getRecentCommits(config.recentCommitsCount),
-            ]);
+            const recentCommits = await gitManager.getRecentCommits(config.recentCommitsCount);
 
             if (token.isCancellationRequested) {
               return undefined;
@@ -96,12 +98,14 @@ export function registerCommands(context: vscode.ExtensionContext): void {
           throw new Error('Failed to set commit message in Git input box');
         }
 
-        // Show success message with details
+        // Show success message with details (surrogate-safe truncation)
         const details = commitMessage.body
           ? `${commitMessage.subject} (+ body)`
           : commitMessage.subject;
+        const detailsChars = [...details];
+        const preview = detailsChars.slice(0, 50).join('');
         vscode.window.showInformationMessage(
-          `${translation.messages.generated} ${details.substring(0, 50)}${details.length > 50 ? '...' : ''}`
+          `${translation.messages.generated} ${preview}${detailsChars.length > 50 ? '...' : ''}`
         );
 
       } catch (error) {

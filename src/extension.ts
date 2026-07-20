@@ -11,6 +11,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const translation = ConfigManager.getTranslation();
 
   try {
+    // Initialize internal state (with migration of legacy settings keys)
+    ConfigManager.initialize(context);
+
     // Check if Git is available
     const isGitAvailable = await GitManager.isGitAvailable();
     if (!isGitAvailable) {
@@ -34,10 +37,7 @@ export async function activate(context: vscode.ExtensionContext) {
     StatusBarManager.initialize(context);
 
     // Welcome message for first-time users
-    const config = vscode.workspace.getConfiguration('gitCommitGenerator');
-    const hasShownWelcome = config.get<boolean>('hasShownWelcome', false);
-    
-    if (!hasShownWelcome) {
+    if (!ConfigManager.hasShownWelcome()) {
       void vscode.window.showInformationMessage(
         translation.messages.welcomeReady,
         translation.messages.openSettings,
@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
           await vscode.commands.executeCommand('git-commit-generator.generate');
         }
 
-        await config.update('hasShownWelcome', true, true);
+        await ConfigManager.setWelcomeShown();
       });
     }
 

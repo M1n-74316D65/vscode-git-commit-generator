@@ -5,8 +5,11 @@ import { ConfigManager } from './config';
 // Constants
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
-const MAX_DIFF_LENGTH = 15000;
 const MODEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const APPROX_CHARS_PER_TOKEN = 4;
+// Chars reserved for the prompt template (system prompt, instructions, stats)
+const PROMPT_TEMPLATE_HEADROOM_CHARS = 8000;
+const MIN_DIFF_CHARS = 2000;
 
 interface CachedModels {
   models: vscode.LanguageModelChat[];
@@ -15,7 +18,6 @@ interface CachedModels {
 
 export class LLMManager {
   private static modelCache: CachedModels | null = null;
-  private static currentRetryAttempt = 0;
 
   /**
    * Generate a commit message using VS Code's Language Model API
@@ -26,7 +28,6 @@ export class LLMManager {
     cancellationToken?: vscode.CancellationToken
   ): Promise<CommitMessage | undefined> {
     const translation = ConfigManager.getTranslation();
-    this.currentRetryAttempt = 0;
 
     try {
       progress?.report({ increment: 10, message: translation.messages.analyzingModel });
@@ -39,8 +40,20 @@ export class LLMManager {
 
       progress?.report({ increment: 20, message: translation.messages.buildingPrompt });
 
+      // Derive the diff truncation limit from the model's input window
+      const maxDiffChars = Math.max(
+        MIN_DIFF_CHARS,
+        model.maxInputTokens * APPROX_CHARS_PER_TOKEN - PROMPT_TEMPLATE_HEADROOM_CHARS
+      );
+      if (context.diff.length > maxDiffChars) {
+        console.warn(
+          `Diff length ${context.diff.length} exceeds derived limit ${maxDiffChars} chars, truncating`
+        );
+        void vscode.window.showWarningMessage(translation.messages.diffTooLarge);
+      }
+
       // Build the prompt
-      const messages = this.buildPrompt(context, translation.systemPrompt);
+      const messages = this.buildPrompt(context, translation.systemPrompt, maxDiffChars);
 
       progress?.report({ increment: 30, message: translation.messages.generating });
 
@@ -56,9 +69,19 @@ export class LLMManager {
 
       return commitMessage;
     } catch (error) {
+      if (this.isCancellation(error, cancellationToken)) {
+        return undefined;
+      }
       this.handleGenerationError(error);
       return undefined;
     }
+  }
+
+  /**
+   * Check whether an error represents user cancellation
+   */
+  private static isCancellation(error: unknown, token?: vscode.CancellationToken): boolean {
+    return error instanceof vscode.CancellationError || Boolean(token?.isCancellationRequested);
   }
 
   /**
@@ -67,7 +90,7 @@ export class LLMManager {
   private static async getAvailableModel(): Promise<vscode.LanguageModelChat | null> {
     const config = vscode.workspace.getConfiguration('gitCommitGenerator');
     const preferredFamily = config.get<string>('modelFamily', 'gpt-4o');
-    const preferredId = config.get<string | null>('modelId', null);
+    const preferredId = ConfigManager.getModelId();
 
     // Check cache first
     if (this.modelCache && Date.now() - this.modelCache.timestamp < MODEL_CACHE_TTL_MS) {
@@ -109,6 +132,7 @@ export class LLMManager {
 
       return null;
     } catch (error) {
+      console.error('Error selecting chat models:', error);
       return null;
     }
   }
@@ -116,7 +140,7 @@ export class LLMManager {
   /**
    * Cache available models
    */
-  private static cacheModels(models: vscode.LanguageModelChat[]): void {
+  static cacheModels(models: vscode.LanguageModelChat[]): void {
     this.modelCache = {
       models,
       timestamp: Date.now()
@@ -139,8 +163,9 @@ export class LLMManager {
     cancellationToken?: vscode.CancellationToken
   ): Promise<string> {
     const translation = ConfigManager.getTranslation();
+    let currentRetryAttempt = 0;
 
-    while (this.currentRetryAttempt < MAX_RETRIES) {
+    while (currentRetryAttempt < MAX_RETRIES) {
       try {
         const response = await model.sendRequest(
           messages,
@@ -156,26 +181,22 @@ export class LLMManager {
 
         return fullMessage;
       } catch (error) {
-        this.currentRetryAttempt++;
-
-        if (this.currentRetryAttempt >= MAX_RETRIES) {
+        if (this.isCancellation(error, cancellationToken)) {
           throw error;
         }
 
-        if (cancellationToken?.isCancellationRequested) {
+        // Only retry retryable LanguageModelErrors; rethrow everything else
+        if (!(error instanceof vscode.LanguageModelError) || !this.isRetryableError(error)) {
           throw error;
         }
 
-        // Check if error is retryable
-        if (error instanceof vscode.LanguageModelError) {
-          const isRetryable = this.isRetryableError(error);
-          if (!isRetryable) {
-            throw error;
-          }
+        currentRetryAttempt++;
+        if (currentRetryAttempt >= MAX_RETRIES) {
+          throw error;
         }
 
         // Wait before retrying
-        await this.delay(RETRY_DELAY_MS * this.currentRetryAttempt);
+        await this.delay(RETRY_DELAY_MS * currentRetryAttempt);
       }
     }
 
@@ -183,12 +204,11 @@ export class LLMManager {
   }
 
   /**
-   * Check if error is retryable
+   * Check if error is retryable (rate limits, timeouts, temporary server errors)
    */
   private static isRetryableError(error: vscode.LanguageModelError): boolean {
     if (error.cause instanceof Error) {
       const causeMessage = error.cause.message.toLowerCase();
-      // Retry on rate limits, timeouts, and temporary errors
       return (
         causeMessage.includes('rate_limit') ||
         causeMessage.includes('timeout') ||
@@ -198,7 +218,16 @@ export class LLMManager {
         causeMessage.includes('504')
       );
     }
-    return false;
+    // Fallback to the error's own message when there is no cause
+    const message = (error.message || '').toLowerCase();
+    return (
+      message.includes('rate_limit') ||
+      message.includes('timeout') ||
+      message.includes('temporarily') ||
+      message.includes('503') ||
+      message.includes('502') ||
+      message.includes('504')
+    );
   }
 
   /**
@@ -213,7 +242,8 @@ export class LLMManager {
    */
   private static buildPrompt(
     context: GenerationContext,
-    systemPrompt: string
+    systemPrompt: string,
+    maxDiffChars: number
   ): vscode.LanguageModelChatMessage[] {
     const messages: vscode.LanguageModelChatMessage[] = [];
 
@@ -250,8 +280,8 @@ export class LLMManager {
 
     // Add the git diff (truncate if necessary)
     let diff = context.diff;
-    if (diff.length > MAX_DIFF_LENGTH) {
-      diff = diff.substring(0, MAX_DIFF_LENGTH) + '\n\n[Diff truncated due to length...]';
+    if (diff.length > maxDiffChars) {
+      diff = diff.substring(0, maxDiffChars) + '\n\n[Diff truncated due to length...]';
     }
 
     messages.push(vscode.LanguageModelChatMessage.User(`Git diff:\n${diff}`));
@@ -343,7 +373,7 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
   /**
    * Parse the LLM response into a CommitMessage
    */
-  private static parseCommitMessage(fullMessage: string): CommitMessage {
+  static parseCommitMessage(fullMessage: string): CommitMessage {
     const lines = fullMessage.split('\n');
 
     if (lines.length === 1) {
@@ -374,10 +404,10 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
   /**
    * Clean the subject line
    */
-  private static cleanSubject(subject: string): string {
+  static cleanSubject(subject: string): string {
     return subject
-      .replace(/^["']|["']$/g, '')
-      .replace(/^\s+|\s+$/g, '');
+      .replace(/^\s+|\s+$/g, '')
+      .replace(/^["']|["']$/g, '');
   }
 
   /**
@@ -403,6 +433,17 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
   private static handleLMError(error: vscode.LanguageModelError): string {
     const translation = ConfigManager.getTranslation();
 
+    // Primary classification via the error code
+    switch (error.code) {
+      case vscode.LanguageModelError.NoPermissions().code:
+        return translation.messages.llmConsentRequired;
+      case vscode.LanguageModelError.Blocked().code:
+        return translation.messages.offTopicError;
+      case vscode.LanguageModelError.NotFound().code:
+        return translation.messages.noModelsAvailable;
+    }
+
+    // Fallback: substring matching on the cause message
     if (error.cause instanceof Error) {
       const causeMessage = error.cause.message.toLowerCase();
 

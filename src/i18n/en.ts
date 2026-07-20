@@ -28,6 +28,11 @@ For body generation (when there are many changes):
 
   messages: {
     noStagedChanges: 'No staged changes found. Stage some files first.',
+    noChanges: 'No changes detected in the repository.',
+    alreadyInProgress: 'Commit message generation is already in progress.',
+    promptTooLarge: 'Unable to fit the commit prompt into the selected model context window.',
+    compressingPrompt: 'Compressing prompt to fit model context...',
+    generatingChars: 'Generating commit message... ({0} chars)',
     noGitRepository: 'No Git repository found in the current workspace.',
     noModelsAvailable: 'No language models available. Please install GitHub Copilot.',
     noModelsWithCopilot: 'No language models available. Make sure GitHub Copilot is installed and enabled.',

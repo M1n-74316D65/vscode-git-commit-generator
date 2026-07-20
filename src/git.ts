@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { GitDiff, GitDiffStats } from './types';
+import { filterDiffSections } from './glob';
 
 const execAsync = promisify(exec);
 
@@ -160,40 +161,66 @@ export class GitManager {
   }
 
   /**
-   * Get staged changes diff.
-   * Returns undefined when there are genuinely no staged changes;
-   * throws when a git command fails so the caller can report the real error.
+   * Get a diff for the given scope ('staged' = staged changes only,
+   * 'all' = all changes relative to HEAD including unstaged).
+   * Paths matching excludePatterns (glob, e.g. `**\/package-lock.json`)
+   * are dropped from the diff before stats are computed.
+   * Returns undefined when the resulting diff is empty;
+   * throws when the git command fails so the caller can report the real error.
    */
-  async getStagedDiff(): Promise<GitDiff | undefined> {
-    // Get the full diff and stats concurrently
-    const [{ stdout: diffOutput }, { stdout: statOutput }] = await Promise.all([
-      execAsync('git diff --staged', {
-        cwd: this.cwd,
-        timeout: GIT_COMMAND_TIMEOUT_MS,
-        maxBuffer: EXEC_MAX_BUFFER,
-      }),
-      execAsync('git diff --staged --stat', {
-        cwd: this.cwd,
-        timeout: GIT_COMMAND_TIMEOUT_MS,
-        maxBuffer: EXEC_MAX_BUFFER,
-      }),
-    ]);
+  async getDiff(
+    scope: 'staged' | 'all',
+    excludePatterns: string[] = []
+  ): Promise<GitDiff | undefined> {
+    const diffArgs = scope === 'staged' ? 'git diff --staged' : 'git diff HEAD';
 
-    if (!diffOutput.trim()) {
+    const { stdout: diffOutput } = await execAsync(diffArgs, {
+      cwd: this.cwd,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      maxBuffer: EXEC_MAX_BUFFER,
+    });
+
+    const filtered = filterDiffSections(diffOutput, excludePatterns);
+
+    if (!filtered.trim()) {
       return undefined;
     }
 
     // Check diff size
-    if (Buffer.byteLength(diffOutput, 'utf8') > MAX_DIFF_SIZE_BYTES) {
-      console.warn(`Staged diff exceeds ${MAX_DIFF_SIZE_BYTES} bytes, will be truncated before sending to the LLM`);
+    if (Buffer.byteLength(filtered, 'utf8') > MAX_DIFF_SIZE_BYTES) {
+      console.warn(`Diff exceeds ${MAX_DIFF_SIZE_BYTES} bytes, prompt will be compressed before sending to the LLM`);
     }
 
-    const stats = GitManager.parseStats(statOutput);
+    const stats = GitManager.computeStatsFromDiff(filtered);
 
     return {
-      content: diffOutput,
+      content: filtered,
       stats,
     };
+  }
+
+  /**
+   * Compute diff stats directly from unified diff content
+   * (exact, unlike parsing the `--stat` summary line).
+   */
+  static computeStatsFromDiff(diff: string): GitDiffStats {
+    let filesChanged = 0;
+    let insertions = 0;
+    let deletions = 0;
+
+    for (const line of diff.split('\n')) {
+      if (line.startsWith('diff --git ')) {
+        filesChanged++;
+      } else if (line.startsWith('+++') || line.startsWith('---')) {
+        continue;
+      } else if (line.startsWith('+')) {
+        insertions++;
+      } else if (line.startsWith('-')) {
+        deletions++;
+      }
+    }
+
+    return { filesChanged, insertions, deletions };
   }
 
   /**

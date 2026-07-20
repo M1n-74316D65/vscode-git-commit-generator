@@ -59,6 +59,9 @@ export class ConfigManager {
       includeBody: config.get<boolean>('includeBody', true),
       bodyThreshold: config.get<number>('bodyThreshold', 5),
       recentCommitsCount: config.get<number>('recentCommitsCount', 10),
+      excludeFiles: (config.get<unknown[]>('excludeFiles', []) ?? []).filter(
+        (pattern): pattern is string => typeof pattern === 'string'
+      ),
       modelFamily: config.get<string>('modelFamily', 'gpt-4o') as ExtensionConfig['modelFamily'],
     };
   }

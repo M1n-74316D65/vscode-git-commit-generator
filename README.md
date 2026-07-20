@@ -13,7 +13,9 @@ AI-powered Git commit message generator for VS Code using GitHub Copilot's Langu
 - ✨ **Gitmoji Integration**: Optional emoji prefixes with independent toggle
 - 📝 **Smart Body Generation**: Automatically generates detailed descriptions for complex changes
 - 📚 **Context Awareness**: Uses recent commit history to maintain consistency
-- 🎨 **Multiple Styles**: Choose from 6 categories of commit conventions
+- 🎯 **Smart Scope Detection**: Uses staged changes when present, falls back to the whole working tree
+- 🧠 **Token-Aware Compression**: Fits large diffs into the model context window automatically
+- 🙈 **File Exclusions**: Skip lockfiles, `.env`, and other noisy paths via glob patterns
 - ⚡ **Performance**: Model caching and retry logic for reliability
 - 🔒 **Secure**: No API keys needed, uses VS Code's built-in LLM
 
@@ -43,7 +45,9 @@ AI-powered Git commit message generator for VS Code using GitHub Copilot's Langu
 
 Open the Command Palette (Ctrl+Shift+P / Cmd+Shift+P) and type:
 
-- `Git Commit: Generate Commit Message` - Generate a message
+- `Git Commit: Generate Commit Message` - Generate a message (staged changes if present, otherwise all changes)
+- `Git Commit: Generate Commit Message (Staged Changes)` - Force staged changes only
+- `Git Commit: Generate Commit Message (All Changes)` - Force the whole working tree
 - `Git Commit: Select Commit Style` - Change commit format
 - `Git Commit: Toggle Gitmojis` - Enable/disable emojis
 - `Git Commit: Refresh Available Models` - Update model list
@@ -100,6 +104,7 @@ Open VS Code settings (Ctrl+, / Cmd+,) and search for "Git Commit Generator":
 | `includeBody` | boolean | `true` | Generate detailed body |
 | `bodyThreshold` | number | `5` | Min files for body generation |
 | `recentCommitsCount` | number | `10` | Context commits count |
+| `excludeFiles` | string[] | `["**/package-lock.json", "**/.env*"]` | Glob patterns to exclude from the diff |
 | `modelFamily` | string | `gpt-4o` | LLM model family |
 
 ## 📖 Examples

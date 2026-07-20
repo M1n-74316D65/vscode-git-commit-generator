@@ -8,19 +8,21 @@ VS Code extension (`m1n.vscode-llm-api-git-commit-generator`, v1.0.1) that gener
 
 Entry: `src/extension.ts` exports `activate`/`deactivate`. `activate()` initializes internal state (`ConfigManager.initialize`, which also migrates legacy `modelId`/`hasShownWelcome` settings into `globalState`), checks git availability, registers commands (`registerCommands`, `registerConfigCommands`), initializes the status bar, and shows a one-time welcome message (persisted via `globalState` key `hasShownWelcome`).
 
-Main flow (`git-commit-generator.generate` in `src/commands.ts`):
+Main flow (`git-commit-generator.generate` in `src/commands.ts`, plus scoped variants `generateStaged`/`generateAll`):
 
-1. `GitManager.findGitRepository()` — repo discovery via `vscode.git` extension API (`getAPI(1)`), fallback `git rev-parse --show-toplevel` per workspace folder.
-2. `GitManager.getStagedDiff()` — shells out via `promisify(exec)` (`git diff --staged` + `--stat` run concurrently, 8MB maxBuffer, 30s timeouts, 1MB diff size warning). Returns `undefined` when there are no staged changes and throws on git failure.
-3. Build `GenerationContext` (diff, language, style, gitmojis, recent commits via `git log --oneline -n N`, `includeBody = includeBody && filesChanged >= bodyThreshold`) inside `vscode.window.withProgress` with a `CancellationToken`.
-4. `LLMManager.generateCommitMessage()` — model selection with 3-strategy fallback (preferred id → family → any) and a 5-minute static model cache; `buildPrompt` (i18n system prompt + per-style rules, diff truncated at a limit derived from `model.maxInputTokens` ≈ tokens × 4 chars minus headroom, with a user-facing warning when truncation occurs); `sendRequestWithRetry` (3 retries, linear backoff, retries only retryable `LanguageModelError`s — rate_limit/timeout/5xx) streaming `response.text`.
-5. `parseCommitMessage` (first non-empty line = subject, rest = body) → `GitManager.setCommitMessage()` writes into the SCM input box (`repo.inputBox.value`).
+1. Single-flight lock (`tryAcquireGenerationLock`) — a second invocation while one runs shows a localized info message and returns.
+2. `GitManager.findGitRepository()` — repo discovery via `vscode.git` extension API (`getAPI(1)`), fallback `git rev-parse --show-toplevel` per workspace folder.
+3. Scope resolution — `generate` is auto-scope: staged diff if non-empty, else all changes (`resolveScope`); `generateStaged`/`generateAll` force the scope.
+4. `GitManager.getDiff(scope, excludePatterns)` — shells out via `promisify(exec)` (`git diff --staged` vs `git diff HEAD`, 8MB maxBuffer, 30s timeout). Sections whose `diff --git a/x b/y` path matches `gitCommitGenerator.excludeFiles` globs are dropped (`src/glob.ts`, zero-dep matcher supporting `**`/`*`/`?`); stats are computed from the filtered diff content. Returns `undefined` on empty diff, throws on git failure.
+5. Build `GenerationContext` inside nested progress: outer `ProgressLocation.SourceControl` spinner + inner cancellable Notification progress.
+6. `LLMManager.generateCommitMessage()` — model selection with 3-strategy fallback (preferred id → family → any) and a 5-minute static model cache; `compressContext` (iterative token-based compression: `model.countTokens` vs `maxInputTokens − 2000` headroom, drop recent commits to a floor of 3, then truncate diff ~20%/step, else `PromptTooLargeError`; shows `diffTooLarge` warning only when compression shrank content); `buildPrompt` (i18n system prompt + per-style rules); `sendRequestWithRetry` (3 retries, linear backoff, retries only retryable `LanguageModelError`s, reports streaming char count via progress).
+7. `parseCommitMessage` (first non-empty line = subject, rest = body) → `GitManager.setCommitMessage()` writes into the SCM input box (`repo.inputBox.value`).
 
 State: static mutable fields on manager classes (model cache, retry counter, status bar item) + VS Code workspace configuration `gitCommitGenerator.*`. No DI container, no external state store.
 
 ## Key Directories
 
-- `src/` — all extension source (entry, commands, git, llm, config, status bar, types, i18n)
+- `src/` — all extension source (entry, commands, git, llm, config, status bar, types, i18n, glob matcher)
 - `src/i18n/` — `en.ts`, `es.ts`, `index.ts` message catalogs
 - `src/test/` — extension-host tests
 - `resources/` — icon placeholder only (see `resources/README.md`)
@@ -53,11 +55,12 @@ Debug: F5 in VS Code (`.vscode/launch.json` "Run Extension", preLaunchTask = def
 
 ## Important Files
 
-- `package.json` — extension manifest: commands, `scm/title` menus (4 buttons, `scmProvider == git`), configuration schema (no `activationEvents` block — VS Code ≥1.74 auto-generates them from contributed commands)
+- `package.json` — extension manifest: commands, `scm/title` menus (navigation buttons + `generateStaged`/`generateAll` in an overflow group, `scmProvider == git`), `scm/inputBox` menu (proposed contribution point, declared via `enabledApiProposals: ["contribSourceControlInputBoxMenu"]`), configuration schema (no `activationEvents` block — VS Code ≥1.74 auto-generates them from contributed commands)
 - `src/extension.ts` — activation entry point
-- `src/commands.ts` — main generation orchestration
-- `src/llm.ts` — model selection, prompt building, retry logic (15 style templates live here)
+- `src/commands.ts` — main generation orchestration (scopes, single-flight lock, nested progress)
+- `src/llm.ts` — model selection, prompt compression/building, retry logic (15 style templates live here)
 - `src/git.ts` — repo discovery and git shell-outs
+- `src/glob.ts` — zero-dep glob matcher + diff-section filter for `excludeFiles`
 - `src/config.ts`, `src/config-commands.ts` — settings access and the 5 config commands
 - `.vscode-test.js` — test runner config
 - `README.md`, `CHANGELOG.md` — user docs; CHANGELOG follows Keep-a-Changelog/SemVer. NOTE: README links to a `CONTRIBUTING.md` that does not exist.

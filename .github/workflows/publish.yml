@@ -27,12 +27,12 @@ jobs:
         run: npm run compile
 
       - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish
+        run: node scripts/vsce-safe.mjs publish
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Package VSIX artifact
-        run: npx @vscode/vsce package
+        run: node scripts/vsce-safe.mjs package
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4

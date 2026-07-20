@@ -5,6 +5,31 @@ All notable changes to the Git Commit Message Generator extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-20
+
+### Added
+- Generate button in the SCM commit input box (progressive enhancement; toolbar buttons remain the fallback)
+- `Generate Commit Message (Staged Changes)` and `Generate Commit Message (All Changes)` commands; the main generate command auto-detects scope
+- Token-aware prompt compression that fits large diffs into the model context window, with a clear error when it cannot
+- `excludeFiles` setting to filter paths (lockfiles, `.env`) out of the diff with glob patterns
+- Single-flight generation lock with a localized "already in progress" message
+- Source Control spinner alongside the cancellable progress notification, with live streaming character count
+- Marketplace icon
+- Publish-safe packaging that strips proposed-API declarations from the manifest
+
+### Fixed
+- Large staged diffs (≥1MB) no longer fail silently or report "no staged changes"
+- Generated messages always target the repository that was diffed in multi-root workspaces
+- Cancellation no longer shows an error toast; only retryable LM errors are retried
+- `modelFamily` setting no longer writes schema-violating values
+- Internal state (`hasShownWelcome`, `modelId`) moved out of user settings into extension storage
+- `recentCommitsCount` is clamped before use in shell commands
+
+## [1.0.2] - 2026-07-20
+
+### Fixed
+- Hardened diff handling, error classification, and command activation
+
 ## [1.0.1] - 2026-03-28
 
 ### Changed

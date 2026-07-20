@@ -48,5 +48,6 @@ export interface ExtensionConfig {
   includeBody: boolean;
   bodyThreshold: number;
   recentCommitsCount: number;
+  excludeFiles: string[];
   modelFamily: string;
 }

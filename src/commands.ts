@@ -4,122 +4,185 @@ import { LLMManager } from './llm';
 import { ConfigManager } from './config';
 import { GenerationContext } from './types';
 
+export type GenerationScope = 'auto' | 'staged' | 'all';
+
+// Single-flight lock: only one generation may run at a time
+let generationInProgress = false;
+
+/**
+ * Try to acquire the single-flight generation lock.
+ */
+export function tryAcquireGenerationLock(): boolean {
+  if (generationInProgress) {
+    return false;
+  }
+  generationInProgress = true;
+  return true;
+}
+
+/**
+ * Release the single-flight generation lock.
+ */
+export function releaseGenerationLock(): void {
+  generationInProgress = false;
+}
+
+/**
+ * Resolve an 'auto' scope to a concrete scope based on whether
+ * there are staged changes.
+ */
+export function resolveScope(
+  requested: GenerationScope,
+  hasStagedChanges: boolean
+): 'staged' | 'all' {
+  if (requested !== 'auto') {
+    return requested;
+  }
+  return hasStagedChanges ? 'staged' : 'all';
+}
+
 export function registerCommands(context: vscode.ExtensionContext): void {
-  const disposable = vscode.commands.registerCommand(
-    'git-commit-generator.generate',
-    async () => {
-      const translation = ConfigManager.getTranslation();
+  const runGenerate = async (scope: GenerationScope): Promise<void> => {
+    const translation = ConfigManager.getTranslation();
 
-      try {
-        // Check for Git repository
-        const gitRoot = await GitManager.findGitRepository();
-        if (!gitRoot) {
-          vscode.window.showWarningMessage(translation.messages.noGitRepository);
-          return;
-        }
-
-        const gitManager = new GitManager(gitRoot);
-
-        // Show progress notification with detailed steps
-        const commitMessage = await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: translation.messages.generating,
-            cancellable: true,
-          },
-          async (progress, token) => {
-            // Setup cancellation
-            if (token.isCancellationRequested) {
-              return undefined;
-            }
-
-            // Check for staged changes (inside progress so large diffs show feedback)
-            const diff = await gitManager.getStagedDiff();
-            if (!diff) {
-              vscode.window.showWarningMessage(translation.messages.noStagedChanges);
-              return undefined;
-            }
-
-            if (token.isCancellationRequested) {
-              return undefined;
-            }
-
-            // Get configuration
-            const config = ConfigManager.getConfig();
-            const language = ConfigManager.getLanguage();
-
-            // Get recent commits for context
-            progress.report({ increment: 15, message: translation.messages.analyzingHistory });
-            const recentCommits = await gitManager.getRecentCommits(config.recentCommitsCount);
-
-            if (token.isCancellationRequested) {
-              return undefined;
-            }
-
-            // Build generation context
-            const generationContext: GenerationContext = {
-              diff: diff.content,
-              language,
-              style: config.style,
-              useGitmojis: config.useGitmojis,
-              recentCommits,
-              includeBody: config.includeBody && diff.stats.filesChanged >= config.bodyThreshold,
-              stats: diff.stats,
-            };
-
-            // Generate commit message with progress reporting
-            const result = await LLMManager.generateCommitMessage(
-              generationContext,
-              progress,
-              token
-            );
-            if (token.isCancellationRequested) {
-              return undefined;
-            }
-
-            return result;
-          }
-        );
-
-        if (!commitMessage) {
-          return;
-        }
-
-        // Format the final message
-        let fullMessage = commitMessage.subject;
-        if (commitMessage.body) {
-          fullMessage += '\n\n' + commitMessage.body;
-        }
-
-        // Set the message in the Git input box
-        const success = await gitManager.setCommitMessage(fullMessage);
-
-        if (!success) {
-          throw new Error('Failed to set commit message in Git input box');
-        }
-
-        // Show success message with details (surrogate-safe truncation)
-        const details = commitMessage.body
-          ? `${commitMessage.subject} (+ body)`
-          : commitMessage.subject;
-        const detailsChars = [...details];
-        const preview = detailsChars.slice(0, 50).join('');
-        vscode.window.showInformationMessage(
-          `${translation.messages.generated} ${preview}${detailsChars.length > 50 ? '...' : ''}`
-        );
-
-      } catch (error) {
-        console.error('Error in generate command:', error);
-
-        let errorMessage = translation.messages.error;
-        if (error instanceof Error) {
-          errorMessage = errorMessage.replace('{0}', error.message);
-        }
-
-        vscode.window.showErrorMessage(errorMessage);
-      }
+    if (!tryAcquireGenerationLock()) {
+      vscode.window.showInformationMessage(translation.messages.alreadyInProgress);
+      return;
     }
-  );
 
-  context.subscriptions.push(disposable);
+    try {
+      // Check for Git repository
+      const gitRoot = await GitManager.findGitRepository();
+      if (!gitRoot) {
+        vscode.window.showWarningMessage(translation.messages.noGitRepository);
+        return;
+      }
+
+      const gitManager = new GitManager(gitRoot);
+      const config = ConfigManager.getConfig();
+
+      // Resolve the effective scope (auto prefers staged changes)
+      let effectiveScope: 'staged' | 'all';
+      let diff;
+      if (scope === 'auto') {
+        const stagedDiff = await gitManager.getDiff('staged', config.excludeFiles);
+        if (stagedDiff) {
+          effectiveScope = 'staged';
+          diff = stagedDiff;
+        } else {
+          effectiveScope = 'all';
+          diff = await gitManager.getDiff('all', config.excludeFiles);
+        }
+      } else {
+        effectiveScope = scope;
+        diff = await gitManager.getDiff(effectiveScope, config.excludeFiles);
+      }
+
+      if (!diff) {
+        vscode.window.showWarningMessage(
+          effectiveScope === 'staged'
+            ? translation.messages.noStagedChanges
+            : translation.messages.noChanges
+        );
+        return;
+      }
+
+      // Outer spinner in the Source Control view, inner cancellable notification
+      const commitMessage = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.SourceControl },
+        async () =>
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: translation.messages.generating,
+              cancellable: true,
+            },
+            async (progress, token) => {
+              // Setup cancellation
+              if (token.isCancellationRequested) {
+                return undefined;
+              }
+
+              const language = ConfigManager.getLanguage();
+
+              // Get recent commits for context
+              progress.report({ increment: 15, message: translation.messages.analyzingHistory });
+              const recentCommits = await gitManager.getRecentCommits(config.recentCommitsCount);
+
+              if (token.isCancellationRequested) {
+                return undefined;
+              }
+
+              // Build generation context
+              const generationContext: GenerationContext = {
+                diff: diff.content,
+                language,
+                style: config.style,
+                useGitmojis: config.useGitmojis,
+                recentCommits,
+                includeBody: config.includeBody && diff.stats.filesChanged >= config.bodyThreshold,
+                stats: diff.stats,
+              };
+
+              // Generate commit message with progress reporting
+              const result = await LLMManager.generateCommitMessage(
+                generationContext,
+                progress,
+                token
+              );
+              if (token.isCancellationRequested) {
+                return undefined;
+              }
+
+              return result;
+            }
+          )
+      );
+
+      if (!commitMessage) {
+        return;
+      }
+
+      // Format the final message
+      let fullMessage = commitMessage.subject;
+      if (commitMessage.body) {
+        fullMessage += '\n\n' + commitMessage.body;
+      }
+
+      // Set the message in the Git input box
+      const success = await gitManager.setCommitMessage(fullMessage);
+
+      if (!success) {
+        throw new Error('Failed to set commit message in Git input box');
+      }
+
+      // Show success message with details (surrogate-safe truncation)
+      const details = commitMessage.body
+        ? `${commitMessage.subject} (+ body)`
+        : commitMessage.subject;
+      const detailsChars = [...details];
+      const preview = detailsChars.slice(0, 50).join('');
+      vscode.window.showInformationMessage(
+        `${translation.messages.generated} ${preview}${detailsChars.length > 50 ? '...' : ''}`
+      );
+
+    } catch (error) {
+      console.error('Error in generate command:', error);
+
+      let errorMessage = translation.messages.error;
+      if (error instanceof Error) {
+        errorMessage = errorMessage.replace('{0}', error.message);
+      }
+
+      vscode.window.showErrorMessage(errorMessage);
+    } finally {
+      releaseGenerationLock();
+    }
+  };
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('git-commit-generator.generate', () => runGenerate('auto')),
+    vscode.commands.registerCommand('git-commit-generator.generateStaged', () => runGenerate('staged')),
+    vscode.commands.registerCommand('git-commit-generator.generateAll', () => runGenerate('all'))
+  );
 }

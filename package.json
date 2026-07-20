@@ -2,7 +2,7 @@
   "name": "vscode-llm-api-git-commit-generator",
   "displayName": "Git Commit Message Generator - LLM API",
   "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "m1n",
   "icon": "resources/icon.png",
   "repository": {
@@ -17,6 +17,9 @@
   "engines": {
     "vscode": "^1.90.0"
   },
+  "enabledApiProposals": [
+    "contribSourceControlInputBoxMenu"
+  ],
   "categories": [
     "SCM Providers",
     "Machine Learning",
@@ -39,6 +42,18 @@
         "title": "Generate Commit Message",
         "category": "Git Commit",
         "icon": "$(sparkle)",
+        "enablement": "gitOpenRepositoryCount > 0"
+      },
+      {
+        "command": "git-commit-generator.generateStaged",
+        "title": "Generate Commit Message (Staged Changes)",
+        "category": "Git Commit",
+        "enablement": "gitOpenRepositoryCount > 0"
+      },
+      {
+        "command": "git-commit-generator.generateAll",
+        "title": "Generate Commit Message (All Changes)",
+        "category": "Git Commit",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
@@ -74,10 +89,26 @@
       }
     ],
     "menus": {
+      "scm/inputBox": [
+        {
+          "command": "git-commit-generator.generate",
+          "when": "scmProvider == git"
+        }
+      ],
       "scm/title": [
         {
           "command": "git-commit-generator.generate",
           "group": "navigation",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "git-commit-generator.generateStaged",
+          "group": "1_generate@1",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "git-commit-generator.generateAll",
+          "group": "1_generate@2",
           "when": "scmProvider == git"
         },
         {
@@ -99,6 +130,14 @@
       "commandPalette": [
         {
           "command": "git-commit-generator.generate",
+          "when": "gitOpenRepositoryCount > 0"
+        },
+        {
+          "command": "git-commit-generator.generateStaged",
+          "when": "gitOpenRepositoryCount > 0"
+        },
+        {
+          "command": "git-commit-generator.generateAll",
           "when": "gitOpenRepositoryCount > 0"
         },
         {
@@ -192,6 +231,17 @@
           "maximum": 50,
           "description": "Number of recent commits to include for context"
         },
+        "gitCommitGenerator.excludeFiles": {
+          "type": "array",
+          "default": [
+            "**/package-lock.json",
+            "**/.env*"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns for files to exclude from the diff sent to the model (supports **, *, ?)"
+        },
         "gitCommitGenerator.modelFamily": {
           "type": "string",
           "default": "gpt-4o",
@@ -207,7 +257,7 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "vscode-test",
-    "package:vsix": "npx @vscode/vsce package"
+    "package:vsix": "node scripts/vsce-safe.mjs package"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

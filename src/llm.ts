@@ -6,14 +6,40 @@ import { ConfigManager } from './config';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const MODEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const APPROX_CHARS_PER_TOKEN = 4;
-// Chars reserved for the prompt template (system prompt, instructions, stats)
-const PROMPT_TEMPLATE_HEADROOM_CHARS = 8000;
-const MIN_DIFF_CHARS = 2000;
+// Tokens reserved for the model's response when sizing the prompt
+const OUTPUT_HEADROOM_TOKENS = 2000;
+// Never shrink recent-commit context below this many entries
+const MIN_RECENT_COMMITS = 3;
+// Stop shrinking the diff below this many chars
+const MIN_DIFF_CHARS = 500;
+const DIFF_TRUNCATION_NOTICE = '\n\n[Diff truncated due to length...]';
 
 interface CachedModels {
   models: vscode.LanguageModelChat[];
   timestamp: number;
+}
+
+/**
+ * Thrown when the prompt cannot be compressed to fit the model's
+ * context window even after all shrink steps.
+ */
+export class PromptTooLargeError extends Error {
+  constructor() {
+    super('Prompt does not fit the model context window');
+    this.name = 'PromptTooLargeError';
+  }
+}
+
+/**
+ * Minimal model surface needed for prompt compression
+ * (allows lightweight fakes in tests).
+ */
+export interface TokenCountableModel {
+  maxInputTokens: number;
+  countTokens(
+    content: string | vscode.LanguageModelChatMessage,
+    token?: vscode.CancellationToken
+  ): Thenable<number>;
 }
 
 export class LLMManager {
@@ -40,25 +66,28 @@ export class LLMManager {
 
       progress?.report({ increment: 20, message: translation.messages.buildingPrompt });
 
-      // Derive the diff truncation limit from the model's input window
-      const maxDiffChars = Math.max(
-        MIN_DIFF_CHARS,
-        model.maxInputTokens * APPROX_CHARS_PER_TOKEN - PROMPT_TEMPLATE_HEADROOM_CHARS
+      // Compress the context to fit the model's input window
+      const compressedContext = await this.compressContext(
+        model,
+        context,
+        translation.systemPrompt,
+        model.maxInputTokens - OUTPUT_HEADROOM_TOKENS,
+        progress,
+        cancellationToken
       );
-      if (context.diff.length > maxDiffChars) {
-        console.warn(
-          `Diff length ${context.diff.length} exceeds derived limit ${maxDiffChars} chars, truncating`
-        );
-        void vscode.window.showWarningMessage(translation.messages.diffTooLarge);
-      }
 
       // Build the prompt
-      const messages = this.buildPrompt(context, translation.systemPrompt, maxDiffChars);
+      const messages = this.buildPrompt(compressedContext, translation.systemPrompt);
 
       progress?.report({ increment: 30, message: translation.messages.generating });
 
       // Send request with retry logic
-      const fullMessage = await this.sendRequestWithRetry(model, messages, cancellationToken);
+      const fullMessage = await this.sendRequestWithRetry(
+        model,
+        messages,
+        cancellationToken,
+        progress
+      );
 
       progress?.report({ increment: 30, message: translation.messages.parsingResponse });
 
@@ -82,6 +111,65 @@ export class LLMManager {
    */
   private static isCancellation(error: unknown, token?: vscode.CancellationToken): boolean {
     return error instanceof vscode.CancellationError || Boolean(token?.isCancellationRequested);
+  }
+
+  /**
+   * Iteratively shrink the generation context until the prompt fits the
+   * token budget: first drop recent-commit entries (down to a floor),
+   * then truncate the diff progressively (~20% per step).
+   * Returns a new context (the input is not mutated); throws
+   * PromptTooLargeError when nothing more can be shrunk.
+   */
+  static async compressContext(
+    model: TokenCountableModel,
+    context: GenerationContext,
+    systemPrompt: string,
+    tokenBudget: number,
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
+    cancellationToken?: vscode.CancellationToken
+  ): Promise<GenerationContext> {
+    const translation = ConfigManager.getTranslation();
+    const working: GenerationContext = {
+      ...context,
+      recentCommits: [...context.recentCommits],
+    };
+    let compressed = false;
+
+    for (;;) {
+      if (cancellationToken?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+      }
+
+      const messages = this.buildPrompt(working, systemPrompt);
+      const counts = await Promise.all(
+        messages.map((message) => model.countTokens(message, cancellationToken))
+      );
+      const totalTokens = counts.reduce((sum, count) => sum + count, 0);
+
+      if (totalTokens <= tokenBudget) {
+        if (compressed) {
+          console.warn(
+            `Prompt compressed to ${totalTokens} tokens (budget ${tokenBudget})`
+          );
+          void vscode.window.showWarningMessage(translation.messages.diffTooLarge);
+        }
+        return working;
+      }
+
+      progress?.report({ message: translation.messages.compressingPrompt });
+      compressed = true;
+
+      if (working.recentCommits.length > MIN_RECENT_COMMITS) {
+        working.recentCommits.pop();
+        continue;
+      }
+
+      const newLength = Math.floor(working.diff.length * 0.8);
+      if (newLength >= working.diff.length || newLength < MIN_DIFF_CHARS) {
+        throw new PromptTooLargeError();
+      }
+      working.diff = working.diff.slice(0, newLength) + DIFF_TRUNCATION_NOTICE;
+    }
   }
 
   /**
@@ -160,7 +248,8 @@ export class LLMManager {
   private static async sendRequestWithRetry(
     model: vscode.LanguageModelChat,
     messages: vscode.LanguageModelChatMessage[],
-    cancellationToken?: vscode.CancellationToken
+    cancellationToken?: vscode.CancellationToken,
+    progress?: vscode.Progress<{ message?: string; increment?: number }>
   ): Promise<string> {
     const translation = ConfigManager.getTranslation();
     let currentRetryAttempt = 0;
@@ -173,10 +262,16 @@ export class LLMManager {
           cancellationToken
         );
 
-        // Collect the response
+        // Collect the response, reporting the running character count
         let fullMessage = '';
         for await (const fragment of response.text) {
           fullMessage += fragment;
+          progress?.report({
+            message: translation.messages.generatingChars.replace(
+              '{0}',
+              String(fullMessage.length)
+            ),
+          });
         }
 
         return fullMessage;
@@ -242,8 +337,7 @@ export class LLMManager {
    */
   private static buildPrompt(
     context: GenerationContext,
-    systemPrompt: string,
-    maxDiffChars: number
+    systemPrompt: string
   ): vscode.LanguageModelChatMessage[] {
     const messages: vscode.LanguageModelChatMessage[] = [];
 
@@ -278,13 +372,8 @@ export class LLMManager {
 
     messages.push(vscode.LanguageModelChatMessage.User(prompt));
 
-    // Add the git diff (truncate if necessary)
-    let diff = context.diff;
-    if (diff.length > maxDiffChars) {
-      diff = diff.substring(0, maxDiffChars) + '\n\n[Diff truncated due to length...]';
-    }
-
-    messages.push(vscode.LanguageModelChatMessage.User(`Git diff:\n${diff}`));
+    // Add the git diff (already sized to fit by compressContext)
+    messages.push(vscode.LanguageModelChatMessage.User(`Git diff:\n${context.diff}`));
 
     return messages;
   }
@@ -417,7 +506,9 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
     const translation = ConfigManager.getTranslation();
     let errorMessage = translation.messages.error;
 
-    if (error instanceof vscode.LanguageModelError) {
+    if (error instanceof PromptTooLargeError) {
+      errorMessage = translation.messages.promptTooLarge;
+    } else if (error instanceof vscode.LanguageModelError) {
       errorMessage = this.handleLMError(error);
     } else if (error instanceof Error) {
       errorMessage = error.message;

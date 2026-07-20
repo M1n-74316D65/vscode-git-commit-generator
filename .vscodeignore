@@ -3,6 +3,7 @@
 .vscode-test/**
 .vscode-test.js
 node_modules/**
+scripts/**
 .git/**
 .gitignore
 AGENTS.md

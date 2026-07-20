@@ -28,6 +28,11 @@ Para generación de cuerpo (cuando hay muchos cambios):
 
   messages: {
     noStagedChanges: 'No se encontraron cambios preparados (staged). Prepara algunos archivos primero.',
+    noChanges: 'No se detectaron cambios en el repositorio.',
+    alreadyInProgress: 'La generación de mensajes de commit ya está en curso.',
+    promptTooLarge: 'No se pudo ajustar el prompt de commit a la ventana de contexto del modelo seleccionado.',
+    compressingPrompt: 'Comprimiendo el prompt para ajustarlo al contexto del modelo...',
+    generatingChars: 'Generando mensaje de commit... ({0} caracteres)',
     noGitRepository: 'No se encontró un repositorio Git en el espacio de trabajo actual.',
     noModelsAvailable: 'No hay modelos de lenguaje disponibles. Por favor instala GitHub Copilot.',
     noModelsWithCopilot: 'No hay modelos de lenguaje disponibles. Asegúrate de que GitHub Copilot esté instalado y habilitado.',

@@ -2,7 +2,7 @@
   "name": "vscode-llm-api-git-commit-generator",
   "displayName": "Git Commit Message Generator - LLM API",
   "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "m1n",
   "repository": {
     "type": "git",

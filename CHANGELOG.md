@@ -5,6 +5,19 @@ All notable changes to the Git Commit Message Generator extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-26
+
+### Added
+
+- Support commit messages in French, German, Italian, Portuguese, and Japanese.
+- Detect supported VS Code locale languages when `gitCommitGenerator.language` is `auto`.
+
+### Changed
+
+- Simplify model-picker rows and style-picker category labels.
+- Use clearer progress, error, and status messages in English and Spanish.
+- Update the README with current commands, settings, and language support.
+
 ## [1.1.0] - 2026-07-20
 
 ### Added

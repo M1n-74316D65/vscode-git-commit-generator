@@ -2,7 +2,7 @@
   "name": "vscode-llm-api-git-commit-generator",
   "displayName": "Git Commit Message Generator - LLM API",
   "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "m1n",
   "icon": "resources/icon.png",
   "repository": {
@@ -159,12 +159,22 @@
           "enum": [
             "auto",
             "en",
-            "es"
+            "es",
+            "fr",
+            "de",
+            "it",
+            "pt",
+            "ja"
           ],
           "enumDescriptions": [
             "Auto-detect from VS Code locale",
             "English",
-            "Español (Spanish)"
+            "Español (Spanish)",
+            "Français (French)",
+            "Deutsch (German)",
+            "Italiano (Italian)",
+            "Português (Portuguese)",
+            "日本語 (Japanese)"
           ],
           "description": "Commit message language. 'auto' detects from VS Code locale."
         },

@@ -349,11 +349,16 @@ export class LLMManager {
     prompt += '\n\n' + styleInstructions;
 
     // Add body generation instructions
-    if (context.language === 'es') {
-      prompt += '\n\nWrite the commit message in Spanish.';
-    } else {
-      prompt += '\n\nWrite the commit message in English.';
-    }
+    const languageNames: Record<string, string> = {
+      en: 'English',
+      es: 'Spanish',
+      fr: 'French',
+      de: 'German',
+      it: 'Italian',
+      pt: 'Portuguese',
+      ja: 'Japanese',
+    };
+    prompt += `\n\nWrite the commit message in ${languageNames[context.language] ?? 'English'}.`;
 
     if (context.includeBody) {
       prompt += '\n\nThis is a complex change with multiple files. Include a detailed body explaining the changes.';

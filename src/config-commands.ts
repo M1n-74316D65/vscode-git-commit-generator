@@ -11,31 +11,30 @@ interface StyleDefinition {
   label: string;
   format: string;
   category: string;
-  categoryIcon: string;
 }
 
 const styles: StyleDefinition[] = [
   // Popular
-  { id: 'conventional', label: 'Conventional Commits', format: 'type: description', category: 'popular', categoryIcon: '⭐' },
-  { id: 'angular', label: 'Angular/Google', format: 'type(scope): description', category: 'popular', categoryIcon: '⭐' },
-  { id: 'atom', label: 'Atom Editor', format: ':emoji: description', category: 'popular', categoryIcon: '⭐' },
-  { id: 'eslint', label: 'ESLint', format: 'Tag: Description', category: 'popular', categoryIcon: '⭐' },
+  { id: 'conventional', label: 'Conventional Commits', format: 'type: description', category: 'popular' },
+  { id: 'angular', label: 'Angular/Google', format: 'type(scope): description', category: 'popular' },
+  { id: 'atom', label: 'Atom Editor', format: ':emoji: description', category: 'popular' },
+  { id: 'eslint', label: 'ESLint', format: 'Tag: Description', category: 'popular' },
   // Framework
-  { id: 'ember', label: 'Ember.js', format: '[TAG] short description', category: 'framework', categoryIcon: '🔧' },
-  { id: 'graphql', label: 'GraphQL', format: 'description (type)', category: 'framework', categoryIcon: '🔧' },
-  { id: 'rails', label: 'Ruby on Rails', format: '[Tag] description', category: 'framework', categoryIcon: '🔧' },
-  { id: 'symfony', label: 'Symfony', format: '[Type] Description', category: 'framework', categoryIcon: '🔧' },
+  { id: 'ember', label: 'Ember.js', format: '[TAG] short description', category: 'framework' },
+  { id: 'graphql', label: 'GraphQL', format: 'description (type)', category: 'framework' },
+  { id: 'rails', label: 'Ruby on Rails', format: '[Tag] description', category: 'framework' },
+  { id: 'symfony', label: 'Symfony', format: '[Type] Description', category: 'framework' },
   // DevOps & Tools
-  { id: 'bitbucket', label: 'Bitbucket', format: 'JIRA-123: description', category: 'devops', categoryIcon: '🛠️' },
-  { id: 'docker', label: 'Docker', format: 'scope: description', category: 'devops', categoryIcon: '🛠️' },
-  { id: 'karma', label: 'Karma Runner', format: 'type(scope): description', category: 'devops', categoryIcon: '🛠️' },
+  { id: 'bitbucket', label: 'Bitbucket', format: 'JIRA-123: description', category: 'devops' },
+  { id: 'docker', label: 'Docker', format: 'scope: description', category: 'devops' },
+  { id: 'karma', label: 'Karma Runner', format: 'type(scope): description', category: 'devops' },
   // System
-  { id: 'jquery', label: 'jQuery', format: 'Component: Short description', category: 'system', categoryIcon: '⚙️' },
-  { id: 'linux', label: 'Linux Kernel', format: 'subsystem: description', category: 'system', categoryIcon: '⚙️' },
+  { id: 'jquery', label: 'jQuery', format: 'Component: Short description', category: 'system' },
+  { id: 'linux', label: 'Linux Kernel', format: 'subsystem: description', category: 'system' },
   // Specialized
-  { id: 'semantic', label: 'Semantic Versioning', format: 'type: description (closes #X)', category: 'specialized', categoryIcon: '📋' },
+  { id: 'semantic', label: 'Semantic Versioning', format: 'type: description (closes #X)', category: 'specialized' },
   // Minimal
-  { id: 'plain', label: 'Plain Simple', format: 'Description', category: 'minimal', categoryIcon: '✨' },
+  { id: 'plain', label: 'Plain Simple', format: 'Description', category: 'minimal' },
 ];
 
 // Group styles by category
@@ -98,8 +97,8 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             // Map models to QuickPick items
             const modelItems = allModels.map(model => ({
               label: model.name,
-              description: `${model.family} by ${model.vendor}`,
-              detail: `ID: ${model.id} | Max Input: ${model.maxInputTokens} tokens`,
+              description: `${model.vendor} · ${model.family}`,
+              detail: `${model.maxInputTokens.toLocaleString()} input tokens`,
               model: model,
               picked: model.family === config.get('modelFamily', 'gpt-4o')
             }));

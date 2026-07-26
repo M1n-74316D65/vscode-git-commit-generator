@@ -42,7 +42,7 @@ export interface CommitMessage {
 }
 
 export interface ExtensionConfig {
-  language: 'auto' | 'en' | 'es';
+  language: 'auto' | 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ja';
   style: CommitStyle;
   useGitmojis: boolean;
   includeBody: boolean;

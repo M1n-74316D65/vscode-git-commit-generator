@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { ExtensionConfig, CommitStyle } from './types';
 import { getTranslation } from './i18n';
 
+const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ja'] as const;
+
 export class ConfigManager {
   private static globalState: vscode.Memento | undefined;
 
@@ -77,8 +79,9 @@ export class ConfigManager {
     const locale = vscode.env.language;
     const baseLang = locale.split('-')[0];
     
-    const supported = ['en', 'es'];
-    return supported.includes(baseLang) ? baseLang : 'en';
+    return SUPPORTED_LANGUAGES.includes(baseLang as typeof SUPPORTED_LANGUAGES[number])
+      ? baseLang
+      : 'en';
   }
 
   static getTranslation() {

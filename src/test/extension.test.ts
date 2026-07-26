@@ -30,7 +30,7 @@ suite('Git Commit Generator', () => {
   test('returns a supported language when auto-detecting', () => {
     const language = ConfigManager.getLanguage();
 
-    assert.ok(['en', 'es'].includes(language));
+    assert.ok(['en', 'es', 'fr', 'de', 'it', 'pt', 'ja'].includes(language));
   });
 
   test('loads translation messages for the active language', () => {

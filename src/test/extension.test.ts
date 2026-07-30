@@ -1,9 +1,11 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { suite, test } from 'mocha';
 import * as vscode from 'vscode';
-import { ConfigManager } from '../config';
+import { ConfigManager, migrateLegacyState } from '../config';
 import { GitManager, sanitizeRecentCommitsCount } from '../git';
-import { LLMManager, PromptTooLargeError } from '../llm';
+import { cancellableDelay, LLMManager, PromptTooLargeError } from '../llm';
 import { matchesGlob, filterDiffSections } from '../glob';
 import {
   resolveScope,
@@ -21,10 +23,47 @@ suite('Git Commit Generator', () => {
 
     const commands = await vscode.commands.getCommands(true);
 
-    assert.ok(commands.includes('git-commit-generator.generate'));
-    assert.ok(commands.includes('git-commit-generator.selectModel'));
-    assert.ok(commands.includes('git-commit-generator.selectStyle'));
-    assert.ok(commands.includes('git-commit-generator.toggleGitmojis'));
+    const manifest = extension.packageJSON as {
+      contributes: { commands: Array<{ command: string }> };
+    };
+    for (const contribution of manifest.contributes.commands) {
+      assert.ok(commands.includes(contribution.command), `${contribution.command} is not registered`);
+    }
+  });
+
+  test('manifest uses only stable, supported workspace capabilities', () => {
+    const root = path.resolve(__dirname, '../..');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+    assert.strictEqual(manifest.enabledApiProposals, undefined);
+    assert.strictEqual(manifest.contributes.menus['scm/inputBox'], undefined);
+    assert.deepStrictEqual(manifest.extensionKind, ['workspace']);
+    assert.strictEqual(manifest.capabilities.untrustedWorkspaces.supported, false);
+    assert.strictEqual(manifest.capabilities.virtualWorkspaces.supported, false);
+  });
+
+  test('manifest localization catalogs contain the same referenced keys', () => {
+    const root = path.resolve(__dirname, '../..');
+    const manifestText = fs.readFileSync(path.join(root, 'package.json'), 'utf8');
+    const english = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.json'), 'utf8'));
+    const spanish = JSON.parse(fs.readFileSync(path.join(root, 'package.nls.es.json'), 'utf8'));
+    const referenced = new Set(
+      Array.from(manifestText.matchAll(/%([^%]+)%/g), (match) => match[1])
+    );
+
+    assert.deepStrictEqual(Object.keys(spanish).sort(), Object.keys(english).sort());
+    assert.deepStrictEqual([...referenced].sort(), Object.keys(english).sort());
+  });
+
+  test('runtime sources use the Output Channel logger instead of console methods', () => {
+    const sourceRoot = path.resolve(__dirname, '../../src');
+    const runtimeFiles = fs.readdirSync(sourceRoot)
+      .filter((file) => file.endsWith('.ts'));
+
+    for (const file of runtimeFiles) {
+      const content = fs.readFileSync(path.join(sourceRoot, file), 'utf8');
+      assert.ok(!/console\.(?:log|warn|error)/.test(content), `${file} uses console output`);
+    }
   });
 
   test('returns a supported language when auto-detecting', () => {
@@ -38,6 +77,51 @@ suite('Git Commit Generator', () => {
 
     assert.ok(translation.messages.generating.length > 0);
     assert.ok(translation.messages.selectStyleTitle.length > 0);
+  });
+
+  test('awaits all legacy state migrations', async () => {
+    let completedUpdates = 0;
+    const values = new Map<string, unknown>();
+    const globalState = {
+      get: (key: string) => values.get(key),
+      update: async (key: string, value: unknown) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        values.set(key, value);
+        completedUpdates++;
+      },
+    } as unknown as vscode.Memento;
+    const config = {
+      get: (key: string, defaultValue: unknown) => key === 'modelId' ? 'legacy-model' : defaultValue,
+      inspect: (key: string) => (
+        key === 'modelId' || key === 'hasShownWelcome'
+          ? { globalValue: true }
+          : undefined
+      ),
+      update: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        completedUpdates++;
+      },
+    } as unknown as vscode.WorkspaceConfiguration;
+
+    await migrateLegacyState(globalState, config);
+
+    assert.strictEqual(values.get('modelId'), 'legacy-model');
+    assert.strictEqual(completedUpdates, 3);
+  });
+
+  test('clears the model cache when available models change', () => {
+    let clearCount = 0;
+    const original = LLMManager.clearModelCache;
+    LLMManager.clearModelCache = () => {
+      clearCount++;
+    };
+
+    try {
+      LLMManager.handleAvailableModelsChanged();
+      assert.strictEqual(clearCount, 1);
+    } finally {
+      LLMManager.clearModelCache = original;
+    }
   });
 
   test('parseStats parses the git diff summary line', () => {
@@ -198,9 +282,22 @@ suite('Git Commit Generator', () => {
     const model = {
       maxInputTokens: 1000,
       countTokens: async (content: string | vscode.LanguageModelChatMessage) => {
-        const text = typeof content === 'string' ? content : content.content
-          .map(part => (part instanceof vscode.LanguageModelTextPart ? part.value : ''))
-          .join('');
+        const messageContent = typeof content === 'string'
+          ? content
+          : (content as unknown as { content: unknown }).content;
+        const text = Array.isArray(messageContent)
+          ? messageContent.map((part) => {
+            if (
+              typeof part === 'object' &&
+              part !== null &&
+              'value' in part &&
+              typeof part.value === 'string'
+            ) {
+              return part.value;
+            }
+            return '';
+          }).join('')
+          : String(messageContent);
         return Math.ceil(text.length / 4);
       },
     };
@@ -223,5 +320,18 @@ suite('Git Commit Generator', () => {
       LLMManager.compressContext(model, fakeContext(1000, 5), '', 1),
       (error: unknown) => error instanceof PromptTooLargeError
     );
+  });
+
+  test('cancellableDelay rejects promptly when cancelled', async () => {
+    const source = new vscode.CancellationTokenSource();
+    const delayed = cancellableDelay(10_000, source.token);
+
+    source.cancel();
+
+    await assert.rejects(
+      delayed,
+      (error: unknown) => error instanceof vscode.CancellationError
+    );
+    source.dispose();
   });
 });

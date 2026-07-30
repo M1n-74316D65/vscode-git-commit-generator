@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { GitDiff, GitDiffStats } from './types';
 import { filterDiffSections } from './glob';
+import { LogManager } from './logger';
 
 const execAsync = promisify(exec);
 
@@ -79,7 +80,7 @@ export class GitManager {
         });
         return stdout.trim();
       } catch (error) {
-        console.error(`Failed to resolve git root for ${folder.uri.fsPath}:`, error);
+        LogManager.error('Git repository root resolution failed', error);
         return undefined;
       }
     });
@@ -122,7 +123,7 @@ export class GitManager {
 
       return gitExtension.exports.getAPI(1) as GitApi;
     } catch (error) {
-      console.error('Failed to get Git extension API:', error);
+      LogManager.error('VS Code Git extension API lookup failed', error);
       return undefined;
     }
   }
@@ -188,7 +189,7 @@ export class GitManager {
 
     // Check diff size
     if (Buffer.byteLength(filtered, 'utf8') > MAX_DIFF_SIZE_BYTES) {
-      console.warn(`Diff exceeds ${MAX_DIFF_SIZE_BYTES} bytes, prompt will be compressed before sending to the LLM`);
+      LogManager.warn('Git diff exceeds the preferred prompt size');
     }
 
     const stats = GitManager.computeStatsFromDiff(filtered);
@@ -243,7 +244,7 @@ export class GitManager {
         .split('\n')
         .filter((line) => line.length > 0);
     } catch (error) {
-      console.error('Error getting recent commits:', error);
+      LogManager.error('Recent Git commit lookup failed', error);
       return [];
     }
   }
@@ -274,13 +275,13 @@ export class GitManager {
     try {
       const git = await GitManager.getGitApi();
       if (!git) {
-        console.error('Could not get Git API');
+        LogManager.error('VS Code Git extension API is unavailable');
         return false;
       }
 
       const repositories = git.repositories;
       if (!repositories || repositories.length === 0) {
-        console.error('No Git repositories found');
+        LogManager.error('No Git repositories are available');
         return false;
       }
 
@@ -298,14 +299,14 @@ export class GitManager {
       }
 
       if (!repo || !repo.inputBox) {
-        console.error('Repository or inputBox not available');
+        LogManager.error('The target Git SCM input is unavailable');
         return false;
       }
 
       repo.inputBox.value = message;
       return true;
     } catch (error) {
-      console.error('Error setting commit message:', error);
+      LogManager.error('Writing the Git SCM input failed', error);
       return false;
     }
   }

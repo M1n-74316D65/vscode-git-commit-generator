@@ -4,19 +4,25 @@ import { registerConfigCommands } from './config-commands';
 import { StatusBarManager } from './status-bar';
 import { GitManager } from './git';
 import { ConfigManager } from './config';
+import { LLMManager } from './llm';
+import { LogManager } from './logger';
+import { NotificationManager } from './notifications';
 
 const EXTENSION_SETTINGS_QUERY = '@ext:m1n.vscode-llm-api-git-commit-generator';
 
 export async function activate(context: vscode.ExtensionContext) {
-  const translation = ConfigManager.getTranslation();
+  LogManager.initialize(context);
 
   try {
     // Initialize internal state (with migration of legacy settings keys)
-    ConfigManager.initialize(context);
+    await ConfigManager.initialize(context);
+    const translation = ConfigManager.getTranslation();
+    LLMManager.initialize(context);
 
     // Check if Git is available
     const isGitAvailable = await GitManager.isGitAvailable();
     if (!isGitAvailable) {
+      LogManager.warn('Git is not available on PATH');
       vscode.window.showWarningMessage(
         translation.messages.gitUnavailable,
         translation.messages.openSettings
@@ -35,36 +41,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize status bar
     StatusBarManager.initialize(context);
-
-    // Welcome message for first-time users
-    if (!ConfigManager.hasShownWelcome()) {
-      void vscode.window.showInformationMessage(
-        translation.messages.welcomeReady,
-        translation.messages.openSettings,
-        translation.messages.generateCommitAction,
-        translation.messages.gotIt
-      ).then(async (result) => {
-        if (result === translation.messages.openSettings) {
-          await vscode.commands.executeCommand(
-            'workbench.action.openSettings',
-            EXTENSION_SETTINGS_QUERY
-          );
-        } else if (result === translation.messages.generateCommitAction) {
-          await vscode.commands.executeCommand('git-commit-generator.generate');
-        }
-
-        await ConfigManager.setWelcomeShown();
-      });
-    }
-
+    LogManager.info('Extension activated');
   } catch (error) {
-    console.error('❌ Error registering commands:', error);
-    vscode.window.showErrorMessage(
-      translation.messages.activationFailed
+    NotificationManager.showError(
+      ConfigManager.getTranslation().messages.activationFailed,
+      'Extension activation failed',
+      error
     );
   }
 }
 
 export function deactivate() {
   StatusBarManager.dispose();
+  LogManager.dispose();
 }

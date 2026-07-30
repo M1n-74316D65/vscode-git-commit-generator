@@ -1,8 +1,8 @@
 {
   "name": "vscode-llm-api-git-commit-generator",
-  "displayName": "Git Commit Message Generator - LLM API",
-  "description": "AI-powered Git commit message generator using Gitmoji and Conventional Commits",
-  "version": "1.2.0",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.2.1",
   "publisher": "m1n",
   "icon": "resources/icon.png",
   "repository": {
@@ -17,9 +17,19 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "enabledApiProposals": [
-    "contribSourceControlInputBoxMenu"
+  "extensionKind": [
+    "workspace"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.untrustedWorkspaces%"
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "%capabilities.virtualWorkspaces%"
+    }
+  },
   "categories": [
     "SCM Providers",
     "Machine Learning",
@@ -39,62 +49,61 @@
     "commands": [
       {
         "command": "git-commit-generator.generate",
-        "title": "Generate Commit Message",
-        "category": "Git Commit",
+        "title": "%commands.generate%",
+        "category": "%commands.category%",
         "icon": "$(sparkle)",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.generateStaged",
-        "title": "Generate Commit Message (Staged Changes)",
-        "category": "Git Commit",
+        "title": "%commands.generateStaged%",
+        "category": "%commands.category%",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.generateAll",
-        "title": "Generate Commit Message (All Changes)",
-        "category": "Git Commit",
+        "title": "%commands.generateAll%",
+        "category": "%commands.category%",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.selectModel",
-        "title": "Select Language Model",
-        "category": "Git Commit",
+        "title": "%commands.selectModel%",
+        "category": "%commands.category%",
         "icon": "$(cloud)",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.openSettings",
-        "title": "Open Settings",
-        "category": "Git Commit"
+        "title": "%commands.openSettings%",
+        "category": "%commands.category%"
       },
       {
         "command": "git-commit-generator.refreshModels",
-        "title": "Refresh Available Models",
-        "category": "Git Commit"
+        "title": "%commands.refreshModels%",
+        "category": "%commands.category%"
       },
       {
         "command": "git-commit-generator.selectStyle",
-        "title": "Select Commit Style",
-        "category": "Git Commit",
+        "title": "%commands.selectStyle%",
+        "category": "%commands.category%",
         "icon": "$(symbol-color)",
         "enablement": "gitOpenRepositoryCount > 0"
       },
       {
         "command": "git-commit-generator.toggleGitmojis",
-        "title": "Toggle Gitmojis",
-        "category": "Git Commit",
+        "title": "%commands.toggleGitmojis%",
+        "category": "%commands.category%",
         "icon": "$(symbol-enum)",
         "enablement": "gitOpenRepositoryCount > 0"
+      },
+      {
+        "command": "git-commit-generator.showLogs",
+        "title": "%commands.showLogs%",
+        "category": "%commands.category%"
       }
     ],
     "menus": {
-      "scm/inputBox": [
-        {
-          "command": "git-commit-generator.generate",
-          "when": "scmProvider == git"
-        }
-      ],
       "scm/title": [
         {
           "command": "git-commit-generator.generate",
@@ -151,7 +160,7 @@
       ]
     },
     "configuration": {
-      "title": "Git Commit Generator",
+      "title": "%configuration.title%",
       "properties": {
         "gitCommitGenerator.language": {
           "type": "string",
@@ -167,16 +176,16 @@
             "ja"
           ],
           "enumDescriptions": [
-            "Auto-detect from VS Code locale",
-            "English",
-            "Español (Spanish)",
-            "Français (French)",
-            "Deutsch (German)",
-            "Italiano (Italian)",
-            "Português (Portuguese)",
-            "日本語 (Japanese)"
+            "%configuration.language.auto%",
+            "%configuration.language.en%",
+            "%configuration.language.es%",
+            "%configuration.language.fr%",
+            "%configuration.language.de%",
+            "%configuration.language.it%",
+            "%configuration.language.pt%",
+            "%configuration.language.ja%"
           ],
-          "description": "Commit message language. 'auto' detects from VS Code locale."
+          "description": "%configuration.language.description%"
         },
         "gitCommitGenerator.style": {
           "type": "string",
@@ -199,47 +208,47 @@
             "bitbucket"
           ],
           "enumDescriptions": [
-            "Conventional Commits - type: description",
-            "Angular/Google - type(scope): description",
-            "Atom Editor - :emoji: description",
-            "ESLint - Tag: Description",
-            "jQuery - Component: Short description",
-            "Ember.js - [TAG] short description",
-            "Linux Kernel - subsystem: description",
-            "Symfony - [Type] Description",
-            "Rails - [Tag] description",
-            "GraphQL - description (type)",
-            "Docker - scope: description",
-            "Karma - type(scope): description",
-            "Semantic - type: description (closes #X)",
-            "Plain - Description",
-            "Bitbucket - JIRA-123: description"
+            "%configuration.style.conventional%",
+            "%configuration.style.angular%",
+            "%configuration.style.atom%",
+            "%configuration.style.eslint%",
+            "%configuration.style.jquery%",
+            "%configuration.style.ember%",
+            "%configuration.style.linux%",
+            "%configuration.style.symfony%",
+            "%configuration.style.rails%",
+            "%configuration.style.graphql%",
+            "%configuration.style.docker%",
+            "%configuration.style.karma%",
+            "%configuration.style.semantic%",
+            "%configuration.style.plain%",
+            "%configuration.style.bitbucket%"
           ],
-          "description": "Commit message style format"
+          "description": "%configuration.style.description%"
         },
         "gitCommitGenerator.useGitmojis": {
           "type": "boolean",
           "default": true,
-          "description": "Include Gitmoji emoji prefixes in commit messages"
+          "description": "%configuration.useGitmojis%"
         },
         "gitCommitGenerator.includeBody": {
           "type": "boolean",
           "default": true,
-          "description": "Generate detailed description body for complex changes"
+          "description": "%configuration.includeBody%"
         },
         "gitCommitGenerator.bodyThreshold": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 50,
-          "description": "Minimum number of changed files to include body generation"
+          "description": "%configuration.bodyThreshold%"
         },
         "gitCommitGenerator.recentCommitsCount": {
           "type": "number",
           "default": 10,
           "minimum": 0,
           "maximum": 50,
-          "description": "Number of recent commits to include for context"
+          "description": "%configuration.recentCommitsCount%"
         },
         "gitCommitGenerator.excludeFiles": {
           "type": "array",
@@ -250,31 +259,32 @@
           "items": {
             "type": "string"
           },
-          "description": "Glob patterns for files to exclude from the diff sent to the model (supports **, *, ?)"
+          "description": "%configuration.excludeFiles%"
         },
         "gitCommitGenerator.modelFamily": {
           "type": "string",
           "default": "gpt-4o",
-          "description": "Language model family to use for commit generation (e.g. gpt-4o, gpt-4o-mini, claude-3.5-sonnet). Set automatically when you select a model."
+          "description": "%configuration.modelFamily%"
         }
       }
     }
   },
   "scripts": {
     "clean": "rm -rf out",
-    "vscode:prepublish": "npm run compile",
-    "compile": "npm run clean && tsc -p ./",
+    "vscode:prepublish": "bun run compile",
+    "compile": "bun run clean && tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
+    "pretest": "bun run compile",
     "test": "vscode-test",
-    "package:vsix": "node scripts/vsce-safe.mjs package"
+    "package:vsix": "bun scripts/package-vsix.mjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "1.90.0",
     "@types/node": "20.x",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/vsce": "3.9.2",
     "typescript": "^5.3.0"
   }
 }

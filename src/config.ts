@@ -4,6 +4,27 @@ import { getTranslation } from './i18n';
 
 const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ja'] as const;
 
+export async function migrateLegacyState(
+  globalState: vscode.Memento,
+  config: vscode.WorkspaceConfiguration
+): Promise<void> {
+  const migrations: Thenable<void>[] = [];
+
+  const legacyModelId = config.get<string | null>('modelId', null);
+  if (legacyModelId && !globalState.get('modelId')) {
+    migrations.push(globalState.update('modelId', legacyModelId));
+  }
+  if (config.inspect('modelId')?.globalValue !== undefined) {
+    migrations.push(config.update('modelId', undefined, true));
+  }
+
+  if (config.inspect('hasShownWelcome')?.globalValue !== undefined) {
+    migrations.push(config.update('hasShownWelcome', undefined, true));
+  }
+
+  await Promise.all(migrations);
+}
+
 export class ConfigManager {
   private static globalState: vscode.Memento | undefined;
 
@@ -11,28 +32,11 @@ export class ConfigManager {
    * Store the extension globalState for internal (non-settings) persistence.
    * Migrates values previously written to workspace configuration.
    */
-  static initialize(context: vscode.ExtensionContext): void {
+  static async initialize(context: vscode.ExtensionContext): Promise<void> {
     this.globalState = context.globalState;
 
     const config = vscode.workspace.getConfiguration('gitCommitGenerator');
-
-    // One-time migration: modelId used to live in settings.json
-    const legacyModelId = config.get<string | null>('modelId', null);
-    if (legacyModelId && !this.globalState.get('modelId')) {
-      void this.globalState.update('modelId', legacyModelId);
-    }
-    if (config.inspect('modelId')?.globalValue !== undefined) {
-      void config.update('modelId', undefined, true);
-    }
-
-    // One-time migration: hasShownWelcome used to live in settings.json
-    const legacyWelcome = config.get<boolean | undefined>('hasShownWelcome', undefined);
-    if (legacyWelcome !== undefined && this.globalState.get('hasShownWelcome') === undefined) {
-      void this.globalState.update('hasShownWelcome', legacyWelcome);
-    }
-    if (config.inspect('hasShownWelcome')?.globalValue !== undefined) {
-      void config.update('hasShownWelcome', undefined, true);
-    }
+    await migrateLegacyState(this.globalState, config);
   }
 
   static getModelId(): string | undefined {
@@ -41,14 +45,6 @@ export class ConfigManager {
 
   static async setModelId(modelId: string): Promise<void> {
     await this.globalState?.update('modelId', modelId);
-  }
-
-  static hasShownWelcome(): boolean {
-    return this.globalState?.get<boolean>('hasShownWelcome') ?? false;
-  }
-
-  static async setWelcomeShown(): Promise<void> {
-    await this.globalState?.update('hasShownWelcome', true);
   }
 
   static getConfig(): ExtensionConfig {

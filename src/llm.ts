@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { GenerationContext, CommitMessage, CommitStyle } from './types';
 import { ConfigManager } from './config';
+import { LogManager } from './logger';
+import { NotificationManager } from './notifications';
 
 // Constants
 const MAX_RETRIES = 3;
@@ -42,8 +44,43 @@ export interface TokenCountableModel {
   ): Thenable<number>;
 }
 
+export function cancellableDelay(
+  ms: number,
+  cancellationToken?: vscode.CancellationToken
+): Promise<void> {
+  if (cancellationToken?.isCancellationRequested) {
+    return Promise.reject(new vscode.CancellationError());
+  }
+
+  return new Promise((resolve, reject) => {
+    let subscription: vscode.Disposable | undefined;
+    const timeout = setTimeout(() => {
+      subscription?.dispose();
+      resolve();
+    }, ms);
+    subscription = cancellationToken?.onCancellationRequested(() => {
+      clearTimeout(timeout);
+      subscription?.dispose();
+      reject(new vscode.CancellationError());
+    });
+  });
+}
+
 export class LLMManager {
   private static modelCache: CachedModels | null = null;
+
+  static initialize(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(
+      vscode.lm.onDidChangeChatModels(() => {
+        this.handleAvailableModelsChanged();
+      })
+    );
+  }
+
+  static handleAvailableModelsChanged(): void {
+    this.clearModelCache();
+    LogManager.info('Available language models changed; model cache cleared');
+  }
 
   /**
    * Generate a commit message using VS Code's Language Model API
@@ -148,9 +185,7 @@ export class LLMManager {
 
       if (totalTokens <= tokenBudget) {
         if (compressed) {
-          console.warn(
-            `Prompt compressed to ${totalTokens} tokens (budget ${tokenBudget})`
-          );
+          LogManager.warn('Prompt context was compressed to fit the selected model');
           void vscode.window.showWarningMessage(translation.messages.diffTooLarge);
         }
         return working;
@@ -220,7 +255,7 @@ export class LLMManager {
 
       return null;
     } catch (error) {
-      console.error('Error selecting chat models:', error);
+      LogManager.error('Language model selection failed', error);
       return null;
     }
   }
@@ -258,7 +293,7 @@ export class LLMManager {
       try {
         const response = await model.sendRequest(
           messages,
-          {},
+          { justification: translation.messages.requestJustification },
           cancellationToken
         );
 
@@ -291,7 +326,10 @@ export class LLMManager {
         }
 
         // Wait before retrying
-        await this.delay(RETRY_DELAY_MS * currentRetryAttempt);
+        await cancellableDelay(
+          RETRY_DELAY_MS * currentRetryAttempt,
+          cancellationToken
+        );
       }
     }
 
@@ -323,13 +361,6 @@ export class LLMManager {
       message.includes('502') ||
       message.includes('504')
     );
-  }
-
-  /**
-   * Delay utility
-   */
-  private static delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -515,12 +546,13 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
       errorMessage = translation.messages.promptTooLarge;
     } else if (error instanceof vscode.LanguageModelError) {
       errorMessage = this.handleLMError(error);
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
     }
 
-    console.error('Error generating commit message:', error);
-    vscode.window.showErrorMessage(errorMessage);
+    NotificationManager.showError(
+      errorMessage,
+      'Commit message generation failed',
+      error
+    );
   }
 
   /**
@@ -560,6 +592,6 @@ ${useGitmojis ? '- Add emoji for visual clarity' : ''}`,
       }
     }
 
-    return translation.messages.error.replace('{0}', error.message);
+    return translation.messages.error;
   }
 }

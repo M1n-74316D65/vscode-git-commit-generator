@@ -22,7 +22,7 @@ Generate Git commit messages from repository changes in VS Code. The extension u
 
 - VS Code 1.90.0 or later.
 - An enabled GitHub Copilot extension with language model access.
-- A Git repository in the workspace.
+- A trusted, file-system-backed Git repository in the workspace.
 
 ## Install
 
@@ -55,6 +55,7 @@ Open the Command Palette with `Ctrl+Shift+P` or `Cmd+Shift+P`.
 | `Git Commit: Select Language Model` | Select an available language model. |
 | `Git Commit: Refresh Available Models` | Refresh the available model list. |
 | `Git Commit: Open Settings` | Open the extension settings. |
+| `Git Commit: Show Logs` | Open the Git Commit Generator output channel. |
 
 The Source Control title bar also has buttons to generate messages, select a style, select a model, and toggle Gitmojis.
 
@@ -128,17 +129,29 @@ Open Settings with `Ctrl+,` or `Cmd+,`. Search for `Git Commit Generator`.
 ```bash
 git clone https://github.com/M1n-74316D65/vscode-git-commit-generator.git
 cd vscode-git-commit-generator
-npm install
-npm run compile
-npm test
+bun install
+bun run compile
+bun run test
 ```
 
 Press `F5` in VS Code to start an Extension Development Host.
+
+Package and verify the release artifact:
+
+```bash
+bun run package:vsix
+bun scripts/verify-vsix.mjs
+```
+
+The verified VSIX is written to `artifacts/vsix/git-commit-generator.vsix`.
+Version tags build the same artifact in CI. Upload that verified file manually to
+the Visual Studio Marketplace instead of packaging a second copy.
 
 ## Known Limits
 
 - The extension truncates large diffs when the model context cannot hold the full diff.
 - The extension requires GitHub Copilot or another language model provider for VS Code.
+- The extension is disabled in Restricted Mode and does not support virtual workspaces.
 
 ## License
 

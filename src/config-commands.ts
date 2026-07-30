@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { ConfigManager } from './config';
 import { LLMManager } from './llm';
 import { CommitStyle } from './types';
+import { LogManager } from './logger';
+import { NotificationManager } from './notifications';
 
 const EXTENSION_SETTINGS_QUERY = '@ext:m1n.vscode-llm-api-git-commit-generator';
 
@@ -116,6 +118,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             if (selected) {
               await config.update('modelFamily', selected.model.family, true);
               await ConfigManager.setModelId(selected.model.id);
+              LLMManager.clearModelCache();
               
               vscode.window.showInformationMessage(
                 translation.messages.modelSet
@@ -124,12 +127,10 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
               );
             }
           } catch (error) {
-            console.error('Error fetching models:', error);
-            vscode.window.showErrorMessage(
-              translation.messages.errorFetchingModels.replace(
-                '{0}',
-                error instanceof Error ? error.message : String(error)
-              )
+            NotificationManager.showError(
+              translation.messages.errorFetchingModels,
+              'Fetching available language models failed',
+              error
             );
           }
         }
@@ -192,16 +193,12 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
             LLMManager.cacheModels(models);
             refreshed = true;
 
-            vscode.window.showInformationMessage(
-              translation.messages.modelsFoundOpeningSelector.replace('{0}', String(models.length))
-            );
+            LogManager.info('Available language models refreshed');
           } catch (error) {
-            console.error('Error refreshing models:', error);
-            vscode.window.showErrorMessage(
-              translation.messages.errorRefreshingModels.replace(
-                '{0}',
-                error instanceof Error ? error.message : String(error)
-              )
+            NotificationManager.showError(
+              translation.messages.errorRefreshingModels,
+              'Refreshing available language models failed',
+              error
             );
           }
         }

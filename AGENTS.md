@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-VS Code extension (`m1n.vscode-llm-api-git-commit-generator`, v1.0.1) that generates Git commit messages from the staged diff using VS Code's built-in Language Model API (`vscode.lm`, e.g. GitHub Copilot) — no external HTTP calls, no API keys. Supports 15 commit styles, optional Gitmoji prefixes, EN/ES localization, and smart body generation.
+VS Code extension (`m1n.vscode-llm-api-git-commit-generator`, v1.2.1) that generates Git commit messages from repository changes using VS Code's built-in Language Model API (`vscode.lm`, e.g. GitHub Copilot) — no external HTTP calls, no API keys. Supports 15 commit styles, optional Gitmoji prefixes, seven commit-message languages, EN/ES UI localization, and smart body generation.
 
 ## Architecture & Data Flow
 
-Entry: `src/extension.ts` exports `activate`/`deactivate`. `activate()` initializes internal state (`ConfigManager.initialize`, which also migrates legacy `modelId`/`hasShownWelcome` settings into `globalState`), checks git availability, registers commands (`registerCommands`, `registerConfigCommands`), initializes the status bar, and shows a one-time welcome message (persisted via `globalState` key `hasShownWelcome`).
+Entry: `src/extension.ts` exports `activate`/`deactivate`. `activate()` initializes the Output Channel logger, awaits legacy setting cleanup, subscribes to language-model availability changes, checks git availability, registers commands (`registerCommands`, `registerConfigCommands`), and initializes the status bar.
 
 Main flow (`git-commit-generator.generate` in `src/commands.ts`, plus scoped variants `generateStaged`/`generateAll`):
 
@@ -30,14 +30,14 @@ State: static mutable fields on manager classes (model cache, retry counter, sta
 
 ## Development Commands
 
-Package manager: **npm** (`package-lock.json` is canonical; `bun.lock` is stale — ignore it).
+Package manager: **Bun** (`bun.lock` is canonical).
 
 ```bash
-npm install          # install
-npm run compile      # clean + tsc -p ./
-npm run watch        # tsc --watch
-npm test             # pretest (compile) + vscode-test
-npm run package:vsix # npx @vscode/vsce package
+bun install          # install
+bun run compile      # clean + tsc -p ./
+bun run watch        # tsc --watch
+bun run test         # pretest (compile) + vscode-test
+bun run package:vsix # package under artifacts/vsix/
 ```
 
 Debug: F5 in VS Code (`.vscode/launch.json` "Run Extension", preLaunchTask = default build).
@@ -49,13 +49,13 @@ Debug: F5 in VS Code (`.vscode/launch.json` "Run Extension", preLaunchTask = def
 - Managers are static classes (`GitManager`, `LLMManager`, `ConfigManager`, `StatusBarManager`) imported directly; only `GitManager` is instantiated per-repo (`new GitManager(root)`).
 - Naming: `XxxManager` classes, `registerXxxCommands` functions, kebab-case filenames, command ids `git-commit-generator.<verb>`, category `"Git Commit"`.
 - Async: async/await throughout, `promisify(exec)` with explicit timeouts, `Promise.all` for parallel git-root probes, `for await` over LM response streams, `vscode.CancellationToken` checks in long operations.
-- Errors: try/catch → `console.error` + localized `vscode.window.showErrorMessage`. `vscode.LanguageModelError` classified primarily by `error.code` (NoPermissions/Blocked/NotFound), with `error.cause.message` substrings (off_topic/rate_limit/consent/quota) as fallback. User cancellation (`vscode.CancellationError` / token) returns silently. Git helpers return `undefined` on "no staged changes" and throw on git failure.
+- Errors: try/catch → sanitized Output Channel logging + localized notifications with an Open Logs action. `vscode.LanguageModelError` is classified primarily by `error.code` (NoPermissions/Blocked/NotFound), with `error.cause.message` substrings (off_topic/rate_limit/consent/quota) as fallback. User cancellation (`vscode.CancellationError` / token) returns silently. Git helpers return `undefined` on "no staged changes" and throw on git failure.
 - i18n: all user-facing strings from `src/i18n/` catalogs, camelCase keys, `{0}`/`{1}` placeholders. Add keys to both `en.ts` and `es.ts`.
 - Settings live under `gitCommitGenerator.*` in `package.json#contributes.configuration` — add new settings there and mirror in `ConfigManager`.
 
 ## Important Files
 
-- `package.json` — extension manifest: commands, `scm/title` menus (navigation buttons + `generateStaged`/`generateAll` in an overflow group, `scmProvider == git`), `scm/inputBox` menu (proposed contribution point, declared via `enabledApiProposals: ["contribSourceControlInputBoxMenu"]`), configuration schema (no `activationEvents` block — VS Code ≥1.74 auto-generates them from contributed commands)
+- `package.json` — stable extension manifest: commands, `scm/title` menus (navigation buttons + `generateStaged`/`generateAll` in an overflow group, `scmProvider == git`), capability declarations, and configuration schema (no `activationEvents` block — VS Code ≥1.74 auto-generates them from contributed commands)
 - `src/extension.ts` — activation entry point
 - `src/commands.ts` — main generation orchestration (scopes, single-flight lock, nested progress)
 - `src/llm.ts` — model selection, prompt compression/building, retry logic (15 style templates live here)
@@ -68,13 +68,13 @@ Debug: F5 in VS Code (`.vscode/launch.json` "Run Extension", preLaunchTask = def
 ## Runtime/Tooling Preferences
 
 - VS Code engine `^1.90.0`; Node 20.x types; TypeScript ^5.3.
-- npm only (see above). Tests download stable VS Code via `@vscode/test-electron`.
-- No CI, no lint, no formatter, no coverage tooling — match existing style by reading neighboring code.
+- Bun only (see above). Tests download VS Code via `@vscode/test-electron`.
+- GitHub Actions runs the Extension Host suite against VS Code 1.90.0 and stable, then packages and verifies the VSIX. There is no lint, formatter, or coverage tooling.
 
 ## Testing & QA
 
 - Mocha (TDD-style `suite`/`test`) + Node `assert`, running **inside the real VS Code Extension Host** via `@vscode/test-cli` — no mocking frameworks; tests use the live `vscode` API.
 - Single suite: `src/test/extension.test.ts` (command registration, language detection, i18n strings). Tests compile to `out/test/**/*.test.js`.
-- Run with `npm test`. Mocha timeout is 20s (`.vscode-test.js`); VS Code `stable` is downloaded on first run.
+- Run with `bun run test`. Mocha timeout is 20s (`.vscode-test.js`); select another VS Code version with `VSCODE_TEST_VERSION`.
 - No coverage thresholds exist. `vscode-test --coverage` is available (bundled c8) but unconfigured.
 - When asserting extension presence, the id is `m1n.vscode-llm-api-git-commit-generator`.

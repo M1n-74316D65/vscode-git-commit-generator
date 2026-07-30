@@ -3,6 +3,8 @@ import { GitManager } from './git';
 import { LLMManager } from './llm';
 import { ConfigManager } from './config';
 import { GenerationContext } from './types';
+import { LogManager } from './logger';
+import { NotificationManager } from './notifications';
 
 export type GenerationScope = 'auto' | 'staged' | 'all';
 
@@ -156,25 +158,14 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         throw new Error('Failed to set commit message in Git input box');
       }
 
-      // Show success message with details (surrogate-safe truncation)
-      const details = commitMessage.body
-        ? `${commitMessage.subject} (+ body)`
-        : commitMessage.subject;
-      const detailsChars = [...details];
-      const preview = detailsChars.slice(0, 50).join('');
-      vscode.window.showInformationMessage(
-        `${translation.messages.generated} ${preview}${detailsChars.length > 50 ? '...' : ''}`
-      );
+      LogManager.info('Commit message generated and written to the SCM input');
 
     } catch (error) {
-      console.error('Error in generate command:', error);
-
-      let errorMessage = translation.messages.error;
-      if (error instanceof Error) {
-        errorMessage = errorMessage.replace('{0}', error.message);
-      }
-
-      vscode.window.showErrorMessage(errorMessage);
+      NotificationManager.showError(
+        translation.messages.error,
+        'Generate command failed',
+        error
+      );
     } finally {
       releaseGenerationLock();
     }

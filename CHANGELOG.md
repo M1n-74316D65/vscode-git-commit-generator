@@ -5,6 +5,34 @@ All notable changes to the Git Commit Message Generator extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-07-30
+
+### Added
+
+- Add a localized `Show Logs` command and Output Channel for runtime diagnostics.
+- Add English and Spanish localization for manifest commands, settings, and capability descriptions.
+- Add CI checks for VS Code 1.90.0 and the current stable release.
+- Add packaged-VSIX integrity checks for size, manifest content, and excluded development files.
+
+### Changed
+
+- Use Bun and `bun.lock` as the project package-manager source of truth.
+- Disable the extension in untrusted and virtual workspaces.
+- Clear the language model cache when available models change.
+- Make retry delays cancellable and include a reason in language model access requests.
+- Package release artifacts under `artifacts/vsix/`.
+- Build release artifacts only from version tags and require manual Marketplace upload of the verified VSIX.
+
+### Removed
+
+- Remove the proposed SCM input-box contribution and proposed-API packaging workaround.
+- Remove first-run and generated-message success notifications.
+
+### Fixed
+
+- Await legacy configuration migrations during activation.
+- Update VS Code test tooling for current macOS application bundles.
+
 ## [1.2.0] - 2026-07-26
 
 ### Added

@@ -13,7 +13,7 @@ Generate Git commit messages from repository changes in VS Code. The extension u
 - Add Gitmoji prefixes when needed.
 - Add a message body for changes that affect several files.
 - Use recent commits as context for the selected style.
-- Generate from staged changes or all working-tree changes.
+- Generate from staged changes or all tracked and untracked working-tree changes.
 - Exclude file paths from the diff that the model receives.
 - Compress large diffs to fit the model context.
 - Select an available language model or model family.
@@ -57,7 +57,9 @@ Open the Command Palette with `Ctrl+Shift+P` or `Cmd+Shift+P`.
 | `Git Commit: Open Settings` | Open the extension settings. |
 | `Git Commit: Show Logs` | Open the Git Commit Generator output channel. |
 
-The Source Control title bar also has buttons to generate messages, select a style, select a model, and toggle Gitmojis.
+The Source Control title bar keeps the generate action inline. Its overflow menu
+contains staged/all scopes, model selection, style selection, and the Gitmoji
+toggle.
 
 ## Commit Styles
 
@@ -149,7 +151,7 @@ the Visual Studio Marketplace instead of packaging a second copy.
 
 ## Known Limits
 
-- The extension truncates large diffs when the model context cannot hold the full diff.
+- The extension reduces large diffs at file, hunk, and line boundaries when the model context cannot hold the full diff.
 - The extension requires GitHub Copilot or another language model provider for VS Code.
 - The extension is disabled in Restricted Mode and does not support virtual workspaces.
 

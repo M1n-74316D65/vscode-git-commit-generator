@@ -53,11 +53,34 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     }
 
     try {
-      // Check for Git repository
-      const gitRoot = await GitManager.findGitRepository();
-      if (!gitRoot) {
+      const repositoryRoots = await GitManager.findGitRepositories();
+      if (repositoryRoots.length === 0) {
         vscode.window.showWarningMessage(translation.messages.noGitRepository);
         return;
+      }
+
+      let gitRoot = GitManager.resolveRepositoryRoot(
+        repositoryRoots,
+        vscode.window.activeTextEditor?.document.uri
+      );
+
+      if (!gitRoot) {
+        const selected = await vscode.window.showQuickPick(
+          repositoryRoots.map((root) => ({
+            label: vscode.workspace.getWorkspaceFolder(vscode.Uri.file(root))?.name ?? root,
+            description: root,
+            root,
+          })),
+          {
+            title: translation.messages.selectRepositoryTitle,
+            placeHolder: translation.messages.selectRepository,
+            ignoreFocusOut: true,
+          }
+        );
+        if (!selected) {
+          return;
+        }
+        gitRoot = selected.root;
       }
 
       const gitManager = new GitManager(gitRoot);

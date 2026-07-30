@@ -5,6 +5,18 @@ All notable changes to the Git Commit Message Generator extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-30
+
+### Changed
+
+- Include untracked files in all-changes generation and support repositories without an initial commit.
+- Ask users to select a repository when a multi-root workspace has no unambiguous active repository.
+- Reduce oversized diffs at file, hunk, and line boundaries before model token counting.
+- Include the configured number of recent commits instead of silently limiting prompt context to five.
+- Treat repository content as untrusted prompt data and validate generated subjects before writing to SCM.
+- Keep only generation inline in the SCM title and move configuration actions to its overflow menu.
+- Remove the redundant status bar item and success notifications for model, style, and Gitmoji changes.
+
 ## [1.2.1] - 2026-07-30
 
 ### Added

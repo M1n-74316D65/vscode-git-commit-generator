@@ -1,16 +1,17 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { GitDiff, GitDiffStats } from './types';
-import { filterDiffSections } from './glob';
+import { filterDiffSections, matchesGlob } from './glob';
 import { LogManager } from './logger';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Constants
 const GIT_COMMAND_TIMEOUT_MS = 30000;
 const MAX_DIFF_SIZE_BYTES = 1024 * 1024; // 1MB
 const EXEC_MAX_BUFFER = 8 * 1024 * 1024; // 8MB, comfortably above MAX_DIFF_SIZE_BYTES
+const UNTRACKED_DIFF_CONCURRENCY = 4;
 const DEFAULT_RECENT_COMMITS_COUNT = 10;
 const MAX_RECENT_COMMITS_COUNT = 50;
 
@@ -36,6 +37,62 @@ interface GitApi {
   getRepository?: (uri: vscode.Uri) => GitApiRepository | null | undefined;
 }
 
+interface GitCommandError extends Error {
+  code?: number | string;
+  stdout?: string;
+}
+
+async function runGit(
+  args: string[],
+  cwd?: string,
+  acceptedExitCodes: number[] = [0]
+): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      maxBuffer: EXEC_MAX_BUFFER,
+      encoding: 'utf8',
+    });
+    return stdout;
+  } catch (error) {
+    const gitError = error as GitCommandError;
+    if (
+      typeof gitError.code === 'number' &&
+      acceptedExitCodes.includes(gitError.code) &&
+      typeof gitError.stdout === 'string'
+    ) {
+      return gitError.stdout;
+    }
+    throw error;
+  }
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      for (;;) {
+        const index = nextIndex++;
+        if (index >= values.length) {
+          return;
+        }
+        results[index] = await mapper(values[index]);
+      }
+    }
+  );
+
+  await Promise.all(workers);
+  return results;
+}
+
 export class GitManager {
   private cwd: string;
 
@@ -46,47 +103,50 @@ export class GitManager {
   /**
    * Find the git repository root in the current workspace
    */
-  static async findGitRepository(): Promise<string | undefined> {
+  static async findGitRepositories(): Promise<string[]> {
     const git = await this.getGitApi();
-    const activeUri = vscode.window.activeTextEditor?.document.uri;
-
-    if (git) {
-      const repo = this.resolveRepository(git, activeUri);
-      if (repo) {
-        return repo.rootUri.fsPath;
-      }
+    if (git?.repositories.length) {
+      return [...new Set(git.repositories.map((repository) => repository.rootUri.fsPath))];
     }
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      return undefined;
+      return [];
     }
 
-    // Prefer the workspace folder containing the active editor, then the rest
-    const orderedFolders = [...workspaceFolders].sort((a, b) => {
-      const activePath = activeUri?.fsPath;
-      const score = (folder: vscode.WorkspaceFolder) =>
-        activePath && (activePath === folder.uri.fsPath || activePath.startsWith(`${folder.uri.fsPath}/`)) ? 0 : 1;
-      return score(a) - score(b);
-    });
-
     // Try to find git root in parallel for all workspace folders
-    const promises = orderedFolders.map(async (folder) => {
+    const roots = await Promise.all(workspaceFolders.map(async (folder) => {
       try {
-        const { stdout } = await execAsync('git rev-parse --show-toplevel', {
-          cwd: folder.uri.fsPath,
-          timeout: GIT_COMMAND_TIMEOUT_MS,
-          maxBuffer: EXEC_MAX_BUFFER,
-        });
-        return stdout.trim();
+        return (await runGit(['rev-parse', '--show-toplevel'], folder.uri.fsPath)).trim();
       } catch (error) {
         LogManager.error('Git repository root resolution failed', error);
         return undefined;
       }
-    });
+    }));
 
-    const results = await Promise.all(promises);
-    return results.find((result) => result !== undefined);
+    return [...new Set(roots.filter((root): root is string => Boolean(root)))];
+  }
+
+  static resolveRepositoryRoot(
+    repositoryRoots: string[],
+    preferredUri?: vscode.Uri
+  ): string | undefined {
+    if (preferredUri?.scheme === 'file') {
+      const preferredPath = preferredUri.fsPath;
+      const containingRoots = repositoryRoots
+        .filter((root) => (
+          preferredPath === root ||
+          preferredPath.startsWith(`${root}/`) ||
+          preferredPath.startsWith(`${root}\\`)
+        ))
+        .sort((left, right) => right.length - left.length);
+
+      if (containingRoots.length > 0) {
+        return containingRoots[0];
+      }
+    }
+
+    return repositoryRoots.length === 1 ? repositoryRoots[0] : undefined;
   }
 
   /**
@@ -94,20 +154,14 @@ export class GitManager {
    */
   static async isGitAvailable(): Promise<boolean> {
     try {
-      await execAsync('git --version', { timeout: 5000, maxBuffer: EXEC_MAX_BUFFER });
+      await execFileAsync('git', ['--version'], {
+        timeout: 5000,
+        maxBuffer: EXEC_MAX_BUFFER,
+      });
       return true;
     } catch {
       return false;
     }
-  }
-
-  static async hasGitRepository(): Promise<boolean> {
-    if (await this.findGitRepository()) {
-      return true;
-    }
-
-    const git = await this.getGitApi();
-    return Boolean(git?.repositories.length);
   }
 
   private static async getGitApi(): Promise<GitApi | undefined> {
@@ -173,13 +227,23 @@ export class GitManager {
     scope: 'staged' | 'all',
     excludePatterns: string[] = []
   ): Promise<GitDiff | undefined> {
-    const diffArgs = scope === 'staged' ? 'git diff --staged' : 'git diff HEAD';
+    const commonDiffArgs = ['diff', '--no-ext-diff', '--no-textconv'];
+    let diffOutput: string;
 
-    const { stdout: diffOutput } = await execAsync(diffArgs, {
-      cwd: this.cwd,
-      timeout: GIT_COMMAND_TIMEOUT_MS,
-      maxBuffer: EXEC_MAX_BUFFER,
-    });
+    if (scope === 'staged') {
+      diffOutput = await runGit([...commonDiffArgs, '--staged'], this.cwd);
+    } else {
+      const hasHead = await this.hasHead();
+      if (hasHead) {
+        diffOutput = await runGit([...commonDiffArgs, 'HEAD'], this.cwd);
+        const untrackedDiff = await this.getUntrackedDiff(excludePatterns);
+        if (untrackedDiff) {
+          diffOutput = [diffOutput.trimEnd(), untrackedDiff].filter(Boolean).join('\n');
+        }
+      } else {
+        diffOutput = await this.getUnbornRepositoryDiff(excludePatterns);
+      }
+    }
 
     const filtered = filterDiffSections(diffOutput, excludePatterns);
 
@@ -234,9 +298,9 @@ export class GitManager {
     }
 
     try {
-      const { stdout } = await execAsync(
-        `git log --oneline -n ${safeCount}`,
-        { cwd: this.cwd, timeout: GIT_COMMAND_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER }
+      const stdout = await runGit(
+        ['log', '--oneline', '-n', String(safeCount)],
+        this.cwd
       );
 
       return stdout
@@ -247,6 +311,71 @@ export class GitManager {
       LogManager.error('Recent Git commit lookup failed', error);
       return [];
     }
+  }
+
+  private async hasHead(): Promise<boolean> {
+    try {
+      await runGit(['rev-parse', '--verify', 'HEAD'], this.cwd);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async getUntrackedDiff(excludePatterns: string[]): Promise<string> {
+    const output = await runGit(
+      ['ls-files', '--others', '--exclude-standard', '-z'],
+      this.cwd
+    );
+    return this.getPathsAsNewFileDiff(output, excludePatterns);
+  }
+
+  private async getUnbornRepositoryDiff(excludePatterns: string[]): Promise<string> {
+    const output = await runGit(
+      ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+      this.cwd
+    );
+    return this.getPathsAsNewFileDiff(output, excludePatterns);
+  }
+
+  private async getPathsAsNewFileDiff(
+    nulSeparatedPaths: string,
+    excludePatterns: string[]
+  ): Promise<string> {
+    const paths = nulSeparatedPaths
+      .split('\0')
+      .filter(Boolean)
+      .filter((path) => !excludePatterns.some((pattern) => matchesGlob(pattern, path)));
+
+    const sections = await mapWithConcurrency(
+      paths,
+      UNTRACKED_DIFF_CONCURRENCY,
+      async (path) => {
+        try {
+          await vscode.workspace.fs.stat(
+            vscode.Uri.joinPath(vscode.Uri.file(this.cwd), ...path.split('/'))
+          );
+        } catch {
+          return '';
+        }
+
+        return runGit(
+          [
+            'diff',
+            '--no-index',
+            '--no-ext-diff',
+            '--no-textconv',
+            '--',
+            '/dev/null',
+            path,
+          ],
+          this.cwd,
+          [0, 1]
+        );
+      }
+    );
+
+    return sections.filter(Boolean).join('\n').trimEnd();
   }
 
   /**

@@ -119,12 +119,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
               await config.update('modelFamily', selected.model.family, true);
               await ConfigManager.setModelId(selected.model.id);
               LLMManager.clearModelCache();
-              
-              vscode.window.showInformationMessage(
-                translation.messages.modelSet
-                  .replace('{0}', selected.model.name)
-                  .replace('{1}', selected.model.family)
-              );
+              LogManager.info(`Language model selected (${selected.model.vendor}:${selected.model.id})`);
             }
           } catch (error) {
             NotificationManager.showError(
@@ -259,10 +254,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
       
       if (selected?.styleId) {
         await config.update('style', selected.styleId, true);
-        const styleName = translation.styles[selected.styleId];
-        vscode.window.showInformationMessage(
-          translation.messages.styleChanged.replace('{0}', styleName)
-        );
+        LogManager.info(`Commit style selected (${selected.styleId})`);
       }
     }
   );
@@ -277,12 +269,7 @@ export function registerConfigCommands(context: vscode.ExtensionContext): void {
       
       const newValue = !currentValue;
       await config.update('useGitmojis', newValue, true);
-      
-      if (newValue) {
-        vscode.window.showInformationMessage(translation.messages.gitmojisEnabled);
-      } else {
-        vscode.window.showInformationMessage(translation.messages.gitmojisDisabled);
-      }
+      LogManager.info(`Gitmojis ${newValue ? 'enabled' : 'disabled'}`);
     }
   );
 

@@ -1,16 +1,16 @@
 # Extension Resources
 
-Place your extension icon here as `icon.png` (128x128 minimum, PNG format).
+The Marketplace icon is stored as `icon.png` at exactly 128×128 pixels.
+`icon.svg` is the editable source and should remain visually equivalent to the
+PNG after every change.
 
-You can generate a simple icon using:
-- [Iconify](https://iconify.design/)
-- [Figma](https://figma.com)
-- [Canva](https://canva.com)
+The mark combines a Git branch with an AI spark. Keep both shapes legible at
+small sizes and preserve sufficient contrast against light and dark Marketplace
+surfaces.
 
-Requirements:
-- Format: PNG
-- Size: 128x128 pixels minimum
-- Background: Transparent or solid
-- Style: Simple and recognizable
+## Requirements
 
-For now, you can use the extension without an icon, but adding one is recommended for the marketplace.
+- Packaged asset: `icon.png`
+- Editable source: `icon.svg`
+- PNG dimensions: 128×128 pixels
+- Style: simple, high-contrast, and recognizable at thumbnail size

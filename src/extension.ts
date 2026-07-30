@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { registerConfigCommands } from './config-commands';
-import { StatusBarManager } from './status-bar';
 import { GitManager } from './git';
 import { ConfigManager } from './config';
 import { LLMManager } from './llm';
@@ -39,8 +38,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register config commands
     registerConfigCommands(context);
 
-    // Initialize status bar
-    StatusBarManager.initialize(context);
     LogManager.info('Extension activated');
   } catch (error) {
     NotificationManager.showError(
@@ -52,6 +49,5 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  StatusBarManager.dispose();
   LogManager.dispose();
 }

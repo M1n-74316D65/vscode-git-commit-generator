@@ -1,38 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1b1f2a"/>
-      <stop offset="1" stop-color="#0d1117"/>
+    <linearGradient id="background" x1="72" y1="48" x2="440" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#202536"/>
+      <stop offset="1" stop-color="#0b0e15"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7c6cff"/>
-      <stop offset="1" stop-color="#4f9cf9"/>
+    <linearGradient id="accent" x1="132" y1="116" x2="340" y2="388" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9b7bff"/>
+      <stop offset="0.52" stop-color="#6b7cff"/>
+      <stop offset="1" stop-color="#38bdf8"/>
     </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
   </defs>
 
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="4"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#background)" filter="url(#shadow)"/>
+  <rect x="18" y="18" width="476" height="476" rx="110" fill="none" stroke="#ffffff" stroke-opacity="0.1" stroke-width="4"/>
 
-  <!-- git branch line -->
-  <path d="M176 128 L176 384 M176 224 C176 288 304 224 304 288 L304 336"
-        fill="none" stroke="url(#accent)" stroke-width="20" stroke-linecap="round"/>
+  <!-- Git branch -->
+  <path d="M160 140V372M160 226C160 268 190 280 232 280H278C308 280 328 300 328 330V356"
+        fill="none" stroke="url(#accent)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- commit nodes -->
-  <circle cx="176" cy="128" r="34" fill="#0d1117" stroke="url(#accent)" stroke-width="16"/>
-  <circle cx="176" cy="384" r="34" fill="#0d1117" stroke="url(#accent)" stroke-width="16"/>
-  <circle cx="304" cy="384" r="34" fill="url(#accent)"/>
+  <!-- Commit nodes -->
+  <circle cx="160" cy="128" r="37" fill="#111622" stroke="url(#accent)" stroke-width="18"/>
+  <circle cx="160" cy="384" r="37" fill="#111622" stroke="url(#accent)" stroke-width="18"/>
+  <circle cx="328" cy="384" r="43" fill="url(#accent)"/>
+  <circle cx="328" cy="384" r="25" fill="#ffffff" fill-opacity="0.12"/>
 
-  <!-- AI sparkle -->
-  <path d="M368 96
-           C376 150 402 176 456 184
-           C402 192 376 218 368 272
-           C360 218 334 192 280 184
-           C334 176 360 150 368 96 Z"
+  <!-- AI spark -->
+  <path d="M374 86C382 139 413 170 466 178C413 186 382 217 374 270C366 217 335 186 282 178C335 170 366 139 374 86Z"
         fill="#ffffff"/>
-  <path d="M420 236
-           C424 262 438 276 464 280
-           C438 284 424 298 420 324
-           C416 298 402 284 376 280
-           C402 276 416 262 420 236 Z"
-        fill="#ffffff" fill-opacity="0.75"/>
+  <circle cx="430" cy="282" r="11" fill="#8bd5ff"/>
 </svg>

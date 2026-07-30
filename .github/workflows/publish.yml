@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   package:
@@ -26,6 +27,7 @@ jobs:
         run: bun run compile
 
       - name: Verify tag matches package version
+        if: github.ref_type == 'tag'
         run: test "${GITHUB_REF_NAME#v}" = "$(bun -p "require('./package.json').version")"
 
       - name: Run extension-host tests
@@ -36,6 +38,11 @@ jobs:
 
       - name: Verify VSIX
         run: bun scripts/verify-vsix.mjs
+
+      - name: Publish to VS Code Marketplace
+        run: bunx vsce publish -i artifacts/vsix/git-commit-generator.vsix --skip-duplicate
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
